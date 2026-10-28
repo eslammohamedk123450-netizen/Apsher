@@ -1,4 +1,4 @@
-name: نشر صفحة الهبوط على صفحات GitHub
+name: Deploy
 
 on:
   push:
@@ -17,41 +17,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: سحب الكود
-        uses: actions/checkout@v4
-      
-      - name: تجهيز الملفات للنشر
+      - uses: actions/checkout@v4
+      - name: Prepare
         run: |
-          echo "=== ROOT ==="
-          ls -la
-          echo "=== SITE CONTENT ==="
-          ls -la site/ | head -50
-          ls -la site/Apsher/ 2>/dev/null || true
-          # نجهز مكان النشر
-          mkdir -p _site_publish
-          # لو الموقع جوه site/Apsher
-          if [ -f "site/Apsher/index.html" ]; then
-            cp -r site/Apsher/* _site_publish/
-          # لو الموقع جوه site مباشرة
-          elif [ -f "site/index.html" ]; then
-            cp -r site/* _site_publish/
-          # لو فيه Apsher في الرووت
-          elif [ -f "Apsher/index.html" ]; then
-            cp -r Apsher/* _site_publish/
-          else
-            echo "بدور على index.html"
-            find . -name "index.html" | head -5
-            IDX=$(find . -name "index.html" | head -1)
-            cp -r $(dirname "$IDX")/* _site_publish/ || true
-          fi
-          echo "=== FINAL ==="
-          ls -la _site_publish/ | head -20
-      
-      - name: رفع ملفات الموقع الجاهز
-        uses: actions/upload-pages-artifact@v3
+          mkdir -p out
+          cp -r موقع/* out/
+          ls out/
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./_site_publish
-          
-      - name: نشر الموقع
-        id: deployment
+          path: ./out
+      - id: deployment
         uses: actions/deploy-pages@v4
