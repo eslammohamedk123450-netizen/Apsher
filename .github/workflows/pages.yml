@@ -27,8 +27,18 @@ jobs:
           
       - name: تثبيت الحزم وبناء المشروع
         run: |
-          npm install
-          npm run build
+          ls -la
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build
+          else
+            cd Apsher
+            npm install
+            npm run build
+            cd ..
+            mkdir -p dist
+            cp -r Apsher/dist/* dist/ || cp -r Apsher/build/* dist/ || cp -r Apsher/* dist/
+          fi
           
       - name: رفع ملفات الموقع
         uses: actions/upload-pages-artifact@v3
