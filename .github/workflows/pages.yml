@@ -25,17 +25,36 @@ jobs:
         with:
           node-version: 20
           
-      - name: تثبيت الحزم وبناء المشروع
+      - name: كشف مكان المشروع وبنائه
         run: |
-          cd site
-          npm install
-          npm run build
+          echo "=== بدور على package.json ==="
+          find . -name "package.json" -type f | head -20
+          echo "=== محتويات site ==="
+          ls -la site/ || true
+          ls -la site/* || true
+          # لو لقينا package.json في site/site مثلا
+          if [ -f "site/package.json" ]; then
+            cd site && npm install && npm run build
+          elif [ -f "site/app/package.json" ]; then
+            cd site/app && npm install && npm run build && mkdir -p ../../dist && cp -r dist/* ../../dist/ || cp -r build/* ../../dist/
+          elif [ -f "site/client/package.json" ]; then
+            cd site/client && npm install && npm run build
+          else
+            # دور على اي package.json
+            PKG=$(find . -name "package.json" | head -1)
+            DIR=$(dirname "$PKG")
+            echo "لقيته في: $DIR"
+            cd "$DIR" && npm install && npm run build
+            mkdir -p ../../dist || true
+            cp -r dist/* ../../dist/ 2>/dev/null || cp -r build/* ../../dist/ 2>/dev/null || cp -r $DIR/dist/* $GITHUB_WORKSPACE/dist/ 2>/dev/null || true
+          fi
           ls -la
+          ls -la dist/ || ls -la site/dist/ || true
           
       - name: رفع ملفات الموقع
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site/dist
+          path: ./dist
           
       - name: نشر الموقع
         id: deployment
