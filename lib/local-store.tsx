@@ -20,6 +20,7 @@ export type Product = {
   sectionId: string;
   name: string;
   description: string;
+  quantity: number;
   imageUri?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -31,6 +32,7 @@ export type ConsumerRecord = {
   productSnapshot: Product;
   sectionName: string;
   usageDescription: string;
+  consumedQuantity: number;
   consumedAt: string;
   addedAt: string;
 };
@@ -92,11 +94,19 @@ export const formatDate = (value: string) => {
 export const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 function normalizeData(input: Partial<AppData>): AppData {
+  const products = (Array.isArray(input.products) ? input.products : []).map((product) => ({
+    ...product,
+    quantity: Number.isFinite(Number((product as Partial<Product>).quantity)) ? Math.max(0, Number((product as Partial<Product>).quantity)) : 1,
+  })) as Product[];
+  const consumerRecords = (Array.isArray(input.consumerRecords) ? input.consumerRecords : []).map((record) => ({
+    ...record,
+    consumedQuantity: Number.isFinite(Number((record as Partial<ConsumerRecord>).consumedQuantity)) ? Math.max(1, Number((record as Partial<ConsumerRecord>).consumedQuantity)) : 1,
+  })) as ConsumerRecord[];
   return {
     version: 1,
     sections: Array.isArray(input.sections) ? input.sections : [],
-    products: Array.isArray(input.products) ? input.products : [],
-    consumerRecords: Array.isArray(input.consumerRecords) ? input.consumerRecords : [],
+    products,
+    consumerRecords,
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : now(),
   };
 }
@@ -156,7 +166,7 @@ export async function exportDataJson(data: AppData) {
   await FileSystem.writeAsStringAsync(path, JSON.stringify(data, null, 2), {
     encoding: FileSystem.EncodingType.UTF8,
   });
-  await shareFile(path, "application/json", "تصدير بيانات إسمير");
+  await shareFile(path, "application/json", "تصدير بيانات أبشر");
   return path;
 }
 
@@ -201,14 +211,14 @@ export async function exportDataZip(data: AppData) {
   zip.file("data.json", JSON.stringify({ ...data, products, consumerRecords: consumers }, null, 2));
   zip.file(
     "README.txt",
-    "نسخة احتياطية من تطبيق إسمير\n\nاستورد ملف ZIP من شاشة الإعدادات لاستعادة الأقسام والمنتجات وسجل المستهلك والصور.\n",
+    "نسخة احتياطية من تطبيق أبشر\n\nاستورد ملف ZIP من شاشة الإعدادات لاستعادة الأقسام والمنتجات وسجل المستهلك والصور.\n",
   );
   const base64 = await zip.generateAsync({ type: "base64", compression: "DEFLATE", compressionOptions: { level: 6 } });
   const root = documentRoot();
   if (!root) return null;
   const path = `${root}emsir-backup-${stamp()}.zip`;
   await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
-  await shareFile(path, "application/zip", "تصدير نسخة إسمير الكاملة");
+  await shareFile(path, "application/zip", "تصدير نسخة أبشر الكاملة");
   return path;
 }
 
@@ -364,7 +374,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!compatible || !enrolled) return false;
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "فتح إسمير",
+      promptMessage: "فتح أبشر",
       fallbackLabel: "استخدم الرقم السري",
     });
     return result.success;

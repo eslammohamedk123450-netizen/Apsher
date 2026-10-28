@@ -29,6 +29,7 @@ export default function ConsumerScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [consumeQuantity, setConsumeQuantity] = useState("1");
   const [usageDescription, setUsageDescription] = useState("");
 
   const term = search.trim().toLocaleLowerCase();
@@ -44,6 +45,11 @@ export default function ConsumerScreen() {
       Alert.alert("اختر منتجًا", "اختر المنتج الذي تم استهلاكه أولًا.");
       return;
     }
+    const quantity = Math.max(1, Math.floor(Number(consumeQuantity) || 0));
+    if (quantity > selectedProduct.quantity) {
+      Alert.alert("الكمية غير متاحة", `المتبقي من المنتج ${selectedProduct.quantity} قطعة فقط.`);
+      return;
+    }
     const sectionName = data.sections.find((section) => section.id === selectedProduct.sectionId)?.name ?? "بدون قسم";
     const addedAt = new Date().toISOString();
     await commit((previous) => ({
@@ -54,18 +60,28 @@ export default function ConsumerScreen() {
         productSnapshot: { ...selectedProduct },
         sectionName,
         usageDescription: usageDescription.trim(),
+        consumedQuantity: quantity,
         consumedAt: addedAt,
         addedAt,
       }, ...previous.consumerRecords],
+      products: previous.products.map((product) => product.id === selectedProduct.id ? { ...product, quantity: Math.max(0, product.quantity - quantity), updatedAt: addedAt } : product),
     }));
     setModalOpen(false);
     setSelectedProduct(null);
     setProductSearch("");
+    setConsumeQuantity("1");
     setUsageDescription("");
   };
 
   const deleteRecord = (id: string) => {
-    const action = () => void commit((previous) => ({ ...previous, consumerRecords: previous.consumerRecords.filter((record) => record.id !== id) }));
+    const action = () => void commit((previous) => {
+      const record = previous.consumerRecords.find((item) => item.id === id);
+      return {
+        ...previous,
+        consumerRecords: previous.consumerRecords.filter((item) => item.id !== id),
+        products: record ? previous.products.map((product) => product.id === record.productId ? { ...product, quantity: product.quantity + record.consumedQuantity, updatedAt: new Date().toISOString() } : product) : previous.products,
+      };
+    });
     if (Platform.OS === "web") {
       if (typeof window !== "undefined" && window.confirm("حذف سجل الاستهلاك؟")) action();
     } else Alert.alert("حذف السجل", "هل تريد حذف هذا السجل؟", [{ text: "إلغاء", style: "cancel" }, { text: "حذف", style: "destructive", onPress: action }]);
@@ -79,7 +95,7 @@ export default function ConsumerScreen() {
     <View style={styles.listHeader}><Text style={styles.count}>{records.length} سجل</Text><Text style={styles.listTitle}>آخر عمليات الاستهلاك</Text></View>
     {records.length ? records.map((record) => <View key={record.id} style={styles.recordCard}>
       {record.productSnapshot.imageUri ? <Image source={{ uri: record.productSnapshot.imageUri }} style={styles.recordImage} /> : <View style={styles.recordImagePlaceholder}><Ionicons name="cube-outline" size={25} color={C.blue} /></View>}
-      <View style={styles.recordCopy}><Text style={styles.recordName}>{record.productSnapshot.name}</Text><Text style={styles.recordSection}>{record.sectionName}</Text><Text style={styles.recordDescription}>{record.usageDescription || "لم تتم إضافة وصف للاستهلاك."}</Text><Text style={styles.recordDate}>{formatDate(record.consumedAt)} · أضيف {formatDate(record.addedAt)}</Text></View>
+      <View style={styles.recordCopy}><Text style={styles.recordName}>{record.productSnapshot.name}</Text><Text style={styles.recordSection}>{record.sectionName} · استهلاك {record.consumedQuantity} قطعة</Text><Text style={styles.recordDescription}>{record.usageDescription || "لم تتم إضافة وصف للاستهلاك."}</Text><Text style={styles.recordDate}>{formatDate(record.consumedAt)} · أضيف {formatDate(record.addedAt)}</Text></View>
       <Pressable onPress={() => deleteRecord(record.id)} style={styles.deleteButton}><Ionicons name="trash-outline" size={18} color={C.red} /></Pressable>
     </View>) : <View style={styles.empty}><View style={styles.emptyIcon}><Ionicons name="receipt-outline" size={31} color={C.blue} /></View><Text style={styles.emptyTitle}>لا توجد سجلات بعد</Text><Text style={styles.emptyText}>عند استخدام أي منتج، أضفه هنا لتكوين سجل واضح يمكن الرجوع إليه.</Text></View>}
   </ScrollView>
@@ -87,7 +103,8 @@ export default function ConsumerScreen() {
   <ModalShell visible={modalOpen} title="إضافة استهلاك" onClose={() => setModalOpen(false)}>
     <Text style={styles.modalHint}>ابحث عن المنتج ثم اكتب أين أو كيف تم استهلاكه.</Text>
     <View style={styles.searchBox}><Ionicons name="search" size={19} color={C.blue} /><TextInput value={productSearch} onChangeText={(value) => { setProductSearch(value); setSelectedProduct(null); }} placeholder="ابحث عن منتج" placeholderTextColor="#8D9AAF" style={styles.searchInput} textAlign="right" /></View>
-    {!selectedProduct ? <View style={styles.productChoices}>{products.slice(0, 8).map((product) => { const section = data.sections.find((item) => item.id === product.sectionId); return <Pressable key={product.id} style={styles.choice} onPress={() => setSelectedProduct(product)}><View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.choiceName}>{product.name}</Text><Text style={styles.choiceSection}>{section?.name ?? "بدون قسم"}</Text></View><Ionicons name="add-circle-outline" size={22} color={C.blue} /></Pressable>; })}{products.length === 0 ? <Text style={styles.noResults}>لا يوجد منتج مطابق.</Text> : null}</View> : <View style={styles.selected}><Ionicons name="checkmark-circle" size={24} color="#16846E" /><View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.choiceName}>{selectedProduct.name}</Text><Text style={styles.choiceSection}>تم اختيار المنتج · اضغط البحث لتغييره</Text></View></View>}
+    {!selectedProduct ? <View style={styles.productChoices}>{products.slice(0, 8).map((product) => { const section = data.sections.find((item) => item.id === product.sectionId); return <Pressable key={product.id} style={[styles.choice, product.quantity === 0 && { opacity: 0.45 }]} disabled={product.quantity === 0} onPress={() => setSelectedProduct(product)}><View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.choiceName}>{product.name}</Text><Text style={styles.choiceSection}>{section?.name ?? "بدون قسم"} · {product.quantity} قطعة متبقية</Text></View><Ionicons name={product.quantity ? "add-circle-outline" : "remove-circle-outline"} size={22} color={C.blue} /></Pressable>; })}{products.length === 0 ? <Text style={styles.noResults}>لا يوجد منتج مطابق.</Text> : null}</View> : <View style={styles.selected}><Ionicons name="checkmark-circle" size={24} color="#16846E" /><View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.choiceName}>{selectedProduct.name}</Text><Text style={styles.choiceSection}>المتبقي: {selectedProduct.quantity} قطعة · اضغط البحث لتغييره</Text></View></View>}
+    <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>عدد القطع المستهلكة</Text><TextInput value={consumeQuantity} onChangeText={setConsumeQuantity} keyboardType="number-pad" placeholder="1" placeholderTextColor="#9AA7B8" style={styles.input} textAlign="right" /></View>
     <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>وصف الاستهلاك</Text><TextInput value={usageDescription} onChangeText={setUsageDescription} placeholder="مثال: تم تركيبه في الورشة رقم 2" placeholderTextColor="#9AA7B8" multiline style={[styles.input, styles.multiline]} textAlign="right" /></View>
     <Pressable style={[styles.addButton, !selectedProduct && { opacity: 0.45 }]} disabled={!selectedProduct} onPress={saveRecord}><Text style={styles.addButtonText}>حفظ سجل الاستهلاك</Text></Pressable>
   </ModalShell>

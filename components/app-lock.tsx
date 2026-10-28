@@ -17,7 +17,7 @@ export function AppLock({ children }: { children: React.ReactNode }) {
     void authenticateBiometric().then((success) => { if (success) setUnlockedPin(pin); });
   }, [ready, pin, biometricEnabled, authenticateBiometric]);
 
-  if (!ready) return <View style={styles.loading}><ActivityIndicator size="large" color={C.blue} /><Text style={styles.loadingText}>جاري فتح إسمير…</Text></View>;
+  if (!ready) return <View style={styles.loading}><ActivityIndicator size="large" color={C.blue} /><Text style={styles.loadingText}>جاري فتح أبشر…</Text></View>;
   if (!pin || unlockedPin === pin) return <>{children}</>;
 
   const unlock = () => {
@@ -31,7 +31,7 @@ export function AppLock({ children }: { children: React.ReactNode }) {
     }
   };
 
-  return <View style={styles.container}><Image source={require("@/assets/images/icon.png")} style={styles.logo} /><Text style={styles.title}>إسمير</Text><Text style={styles.subtitle}>أدخل الرقم السري لعرض بياناتك المحلية</Text><View style={styles.lockIcon}><Ionicons name="lock-closed-outline" size={30} color={C.blue} /></View><TextInput value={value} onChangeText={setValue} onSubmitEditing={unlock} secureTextEntry keyboardType="number-pad" maxLength={8} placeholder="الرقم السري" placeholderTextColor="#9AA7B8" style={styles.input} textAlign="center" /><Pressable style={styles.button} onPress={unlock}><Text style={styles.buttonText}>فتح التطبيق</Text></Pressable>{biometricEnabled ? <Pressable style={styles.biometric} onPress={() => void authenticateBiometric().then((success) => { if (success) setUnlockedPin(pin); else Alert.alert("البصمة", "تعذر التحقق بالبصمة."); })}><Ionicons name="finger-print-outline" size={21} color={C.blue} /><Text style={styles.biometricText}>فتح بالبصمة</Text></Pressable> : null}{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.note}>بياناتك محفوظة على الجهاز ولا تحتاج إلى إنترنت.</Text></View>;
+  return <View style={styles.container}><Image source={require("@/assets/images/icon.png")} style={styles.logo} /><Text style={styles.title}>أبشر</Text><Text style={styles.subtitle}>أدخل الرقم السري لعرض بياناتك المحلية</Text><View style={styles.lockIcon}><Ionicons name="lock-closed-outline" size={30} color={C.blue} /></View><TextInput value={value} onChangeText={setValue} onSubmitEditing={unlock} secureTextEntry keyboardType="number-pad" maxLength={8} placeholder="الرقم السري" placeholderTextColor="#9AA7B8" style={styles.input} textAlign="center" /><Pressable style={styles.button} onPress={unlock}><Text style={styles.buttonText}>فتح التطبيق</Text></Pressable>{biometricEnabled ? <Pressable style={styles.biometric} onPress={() => void authenticateBiometric().then((success) => { if (success) setUnlockedPin(pin); else Alert.alert("البصمة", "تعذر التحقق بالبصمة."); })}><Ionicons name="finger-print-outline" size={21} color={C.blue} /><Text style={styles.biometricText}>فتح بالبصمة</Text></Pressable> : null}{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.note}>بياناتك محفوظة على الجهاز ولا تحتاج إلى إنترنت.</Text></View>;
 }
 
 const styles = StyleSheet.create({

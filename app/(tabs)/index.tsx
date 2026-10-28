@@ -92,6 +92,7 @@ export default function HomeScreen() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
+  const [productQuantity, setProductQuantity] = useState("1");
   const [productImage, setProductImage] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
@@ -110,6 +111,7 @@ export default function HomeScreen() {
     setEditingProduct(null);
     setProductName("");
     setProductDescription("");
+    setProductQuantity("1");
     setProductImage(null);
     setProductModal(true);
   };
@@ -119,6 +121,7 @@ export default function HomeScreen() {
     setEditingProduct(product);
     setProductName(product.name);
     setProductDescription(product.description);
+    setProductQuantity(String(product.quantity));
     setProductImage(product.imageUri ?? null);
     setProductModal(true);
     setDetailProduct(null);
@@ -140,6 +143,7 @@ export default function HomeScreen() {
   const saveProduct = async () => {
     const clean = productName.trim();
     const targetSectionId = editingProduct?.sectionId ?? sectionId;
+    const quantity = Math.max(0, Math.floor(Number(productQuantity) || 0));
     if (!clean || !targetSectionId) {
       Alert.alert("اختر قسمًا", "افتح المنتج من داخل قسم أو اختر قسمًا قبل الحفظ.");
       return;
@@ -151,6 +155,7 @@ export default function HomeScreen() {
           ...item,
           name: clean,
           description: productDescription.trim(),
+          quantity,
           imageUri: productImage,
           updatedAt: new Date().toISOString(),
         } : item),
@@ -164,6 +169,7 @@ export default function HomeScreen() {
           sectionId: targetSectionId,
           name: clean,
           description: productDescription.trim(),
+          quantity,
           imageUri: productImage,
           createdAt,
           updatedAt: createdAt,
@@ -268,7 +274,7 @@ export default function HomeScreen() {
               <View style={styles.sectionAccent} />
               <View style={styles.sectionCardContent}>
                 <View style={styles.sectionArrow}><Ionicons name="chevron-back" size={20} color={COLORS.blue} /></View>
-                <View style={styles.sectionCardText}><Text style={styles.sectionName}>{section.name}</Text><Text style={styles.sectionMeta}>{data.products.filter((product) => product.sectionId === section.id).length} عنصر محفوظ</Text></View>
+                <View style={styles.sectionCardText}><Text style={styles.sectionName}>{section.name}</Text><Text style={styles.sectionMeta}>{data.products.filter((product) => product.sectionId === section.id).length} منتج · {data.products.filter((product) => product.sectionId === section.id).reduce((sum, product) => sum + product.quantity, 0)} قطعة متبقية</Text></View>
                 <Pressable onPress={(event) => { event.stopPropagation(); setEditingSectionId(section.id); setSectionName(section.name); setSectionModal(true); }} style={styles.editSectionButton}><Ionicons name="create-outline" size={18} color={COLORS.blue} /></Pressable>
                 <View style={styles.sectionIcon}><Ionicons name="folder-open-outline" size={23} color={COLORS.blue} /></View>
               </View>
@@ -286,6 +292,7 @@ export default function HomeScreen() {
       <ModalShell visible={productModal} title={editingProduct ? "تعديل المنتج" : "إضافة منتج"} onClose={() => setProductModal(false)}>
         <Text style={styles.modalHint}>القسم الحالي: {currentSection?.name ?? "غير محدد"}</Text>
         <Field label="اسم المنتج" value={productName} onChangeText={setProductName} placeholder="مثال: مفتاح إنجليزي" />
+        <Field label="عدد القطع المتبقية" value={productQuantity} onChangeText={setProductQuantity} placeholder="مثال: 10" />
         <Field label="الوصف" value={productDescription} onChangeText={setProductDescription} placeholder="اكتب وصفًا يساعدك في البحث لاحقًا" multiline />
         <Pressable style={styles.imagePicker} onPress={chooseImage}>
           {productImage ? <Image source={{ uri: productImage }} style={styles.previewImage} /> : <View style={styles.imagePlaceholder}><Ionicons name="image-outline" size={28} color={COLORS.blue} /><Text style={styles.imagePickerText}>اختيار صورة من الجهاز</Text></View>}
@@ -298,6 +305,7 @@ export default function HomeScreen() {
           {detailProduct.imageUri ? <Image source={{ uri: detailProduct.imageUri }} style={styles.detailImage} /> : <View style={styles.detailImagePlaceholder}><Ionicons name="cube-outline" size={42} color={COLORS.blue} /></View>}
           <Text style={styles.detailName}>{detailProduct.name}</Text>
           <Text style={styles.detailSection}>{data.sections.find((item) => item.id === detailProduct.sectionId)?.name ?? "بدون قسم"}</Text>
+          <Text style={styles.stockBadge}>{detailProduct.quantity} قطعة متبقية</Text>
           <Text style={styles.detailDescription}>{detailProduct.description || "لا يوجد وصف مضاف لهذا المنتج."}</Text>
           <Text style={styles.detailDate}>أضيف في {formatDate(detailProduct.createdAt)}</Text>
           <View style={styles.actionRow}><Pressable style={styles.primaryButton} onPress={() => openEditProduct(detailProduct)}><Ionicons name="create-outline" size={18} color={COLORS.white} /><Text style={styles.primaryButtonText}>تعديل</Text></Pressable><Pressable style={styles.ghostButton} onPress={() => deleteProduct(detailProduct)}><Ionicons name="trash-outline" size={18} color={COLORS.red} /><Text style={styles.dangerText}>حذف</Text></Pressable></View>
@@ -314,7 +322,7 @@ function StatCard({ number, label, icon }: { number: number; label: string; icon
 function ProductCard({ product, sectionName, onPress, onEdit }: { product: Product; sectionName: string; onPress: () => void; onEdit: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.82 }]}>
     {product.imageUri ? <Image source={{ uri: product.imageUri }} style={styles.productThumb} /> : <View style={styles.productThumbPlaceholder}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}
-    <View style={styles.productCopy}><Text style={styles.productName}>{product.name}</Text><Text style={styles.productSection}>{sectionName}</Text><Text style={styles.productDescription} numberOfLines={2}>{product.description || "بدون وصف"}</Text></View>
+    <View style={styles.productCopy}><Text style={styles.productName}>{product.name}</Text><Text style={styles.productSection}>{sectionName} · {product.quantity} قطعة متبقية</Text><Text style={styles.productDescription} numberOfLines={2}>{product.description || "بدون وصف"}</Text></View>
     <Pressable onPress={(event) => { event.stopPropagation(); onEdit(); }} style={styles.editButton}><Ionicons name="create-outline" size={18} color={COLORS.blue} /></Pressable>
   </Pressable>;
 }
@@ -399,6 +407,7 @@ const styles = StyleSheet.create({
   detailImagePlaceholder: { height: 150, borderRadius: 18, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
   detailName: { color: COLORS.navy, fontSize: 23, fontWeight: "800", textAlign: "right" },
   detailSection: { color: COLORS.blue, fontSize: 13, fontWeight: "800", textAlign: "right" },
+  stockBadge: { alignSelf: "flex-end", color: COLORS.green, backgroundColor: "#ECF8F3", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, fontWeight: "900" },
   detailDescription: { color: COLORS.muted, fontSize: 14, lineHeight: 22, textAlign: "right" },
   detailDate: { color: COLORS.muted, fontSize: 12, textAlign: "right" },
 });
