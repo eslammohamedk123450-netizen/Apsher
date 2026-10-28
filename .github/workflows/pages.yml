@@ -18,24 +18,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare
+      - name: Find and prepare site
         run: |
-          ls -la
-          echo "--- البحث عن الفولدر ---"
-          find . -maxdepth 3 -type d -print
+          echo "== اين هو index.html =="
+          find . -name "index.html" | grep -v ".git"
           mkdir -p out
-          if [ -d "موقع" ]; then
-            cp -r موقع/. out/
-          elif [ -d "Apsher" ]; then
-            cp -r Apsher/. out/
-          elif [ -d "site" ]; then
-            cp -r site/. out/
-          else
-            F=$(find . -name "index.html" | head -1)
-            echo "Found $F"
-            cp -r $(dirname "$F")/. out/
-          fi
+          # دور على اول index.html وانشر الفولدر بتاعه
+          FILE=$(find . -type f -name "index.html" ! -path "./.github/*" ! -path "./out/*" | head -1)
+          echo "Found: $FILE"
+          FOLDER=$(dirname "$FILE")
+          echo "Folder: $FOLDER"
+          cp -r "$FOLDER"/. out/
+          echo "== محتوى out =="
           ls -la out/
+          # لازم يكون فيه index.html في out
+          ls out/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
