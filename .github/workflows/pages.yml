@@ -20,9 +20,22 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare
         run: |
+          ls -la
+          echo "--- البحث عن الفولدر ---"
+          find . -maxdepth 3 -type d -print
           mkdir -p out
-          cp -r موقع/* out/
-          ls out/
+          if [ -d "موقع" ]; then
+            cp -r موقع/. out/
+          elif [ -d "Apsher" ]; then
+            cp -r Apsher/. out/
+          elif [ -d "site" ]; then
+            cp -r site/. out/
+          else
+            F=$(find . -name "index.html" | head -1)
+            echo "Found $F"
+            cp -r $(dirname "$F")/. out/
+          fi
+          ls -la out/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
