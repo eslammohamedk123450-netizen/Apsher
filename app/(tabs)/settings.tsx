@@ -85,7 +85,7 @@ export default function SettingsScreen() {
     </View>
 
     <View style={styles.tip}><Ionicons name="bulb-outline" size={21} color={C.orange} /><Text style={styles.tipText}>للحفاظ على بياناتك بعد حذف التطبيق أو تغيير الهاتف، صدّر ZIP واحفظه في مكان آمن. الاسترداد يعيد الصور والبيانات معًا.</Text></View>
-    <Text style={styles.footer}>إسمير · {data.sections.length} أقسام · {data.products.length} منتجات</Text>
+    <Text style={styles.footer}>أبشر · {data.sections.length} أقسام · {data.products.length} منتجات</Text>
 
     <Modal visible={pinModal} transparent animationType="fade" onRequestClose={() => setPinModal(false)}><View style={styles.pinBackdrop}><View style={styles.pinCard}><Text style={styles.pinTitle}>تفعيل الرقم السري</Text><Text style={styles.pinHint}>أدخل من 4 إلى 8 أرقام لحماية فتح التطبيق.</Text><TextInput value={pinValue} onChangeText={setPinValue} keyboardType="number-pad" secureTextEntry maxLength={8} placeholder="••••" placeholderTextColor="#9AA7B8" style={styles.pinInput} textAlign="center" /><View style={styles.pinActions}><Pressable style={styles.cancelButton} onPress={() => { setPinValue(""); setPinModal(false); }}><Text style={styles.cancelText}>إلغاء</Text></Pressable><Pressable style={styles.saveButton} onPress={savePin}><Text style={styles.saveText}>تفعيل</Text></Pressable></View></View></View></Modal>
   </ScrollView></ScreenContainer>;
