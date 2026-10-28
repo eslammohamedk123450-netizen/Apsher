@@ -1,18 +1,14 @@
-name: Publish landing page to GitHub Pages
+name: نشر صفحة الهبوط على صفحات GitHub
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -21,12 +17,20 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: سحب الكود
         uses: actions/checkout@v4
-      - name: Upload website files
+      - name: تثبيت Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: تثبيت الحزم وبناء المشروع
+        run: |
+          npm ci
+          npm run build
+      - name: رفع ملفات الموقع
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
-      - name: Deploy website
+          path: ./dist
+      - name: نشر الموقع
         id: deployment
         uses: actions/deploy-pages@v4
