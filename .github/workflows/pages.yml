@@ -19,18 +19,22 @@ jobs:
     steps:
       - name: سحب الكود
         uses: actions/checkout@v4
+      
       - name: تثبيت Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          
       - name: تثبيت الحزم وبناء المشروع
         run: |
-          npm ci
+          npm install
           npm run build
+          
       - name: رفع ملفات الموقع
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
+          
       - name: نشر الموقع
         id: deployment
         uses: actions/deploy-pages@v4
