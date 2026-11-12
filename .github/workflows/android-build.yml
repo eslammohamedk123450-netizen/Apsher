@@ -39,17 +39,22 @@ jobs:
       - name: Enable Multidex
         run: |
           python3 << 'PY'
-          import pathlib
+          import pathlib, re
           p = pathlib.Path("android/app/build.gradle")
           t = p.read_text()
-          # شغل الـ multidex جوه defaultConfig
+          # 1. حطه جوه defaultConfig فقط، مش في اي minSdkVersion تاني
           if "multiDexEnabled" not in t:
-              t = t.replace("minSdkVersion", "multiDexEnabled true\n        minSdkVersion")
-          # ضيف مكتبة الـ multidex
+              t = re.sub(
+                  r"(defaultConfig\s*\{)",
+                  r"\1\n        multiDexEnabled true",
+                  t,
+                  count=1
+              )
+          # 2. ضيف المكتبة
           if "androidx.multidex" not in t:
-              t = t.replace("dependencies {", "dependencies {\n    implementation 'androidx.multidex:multidex:2.0.1'")
+              t = t.replace("dependencies {", "dependencies {\n    implementation 'androidx.multidex:multidex:2.0.1'", 1)
           p.write_text(t)
-          print("Multidex enabled")
+          print("Multidex fixed inside defaultConfig")
           PY
 
       - name: Grant execute permission for gradlew
