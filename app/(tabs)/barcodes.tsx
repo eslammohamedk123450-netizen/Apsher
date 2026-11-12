@@ -1,4 +1,3 @@
-import Barcode from "react-native-barcode-svg";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -7,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { Barcode } from "@/components/barcode";
 import { useApp } from "@/lib/local-store";
 
 const C = { navy: "#10253F", blue: "#2F78C9", blueLight: "#EAF3FC", bg: "#F6F8FB", white: "#FFFFFF", muted: "#68768A", border: "#DCE4EF", orange: "#F59E0B", green: "#16846E" };

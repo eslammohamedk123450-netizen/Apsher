@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import Barcode from "react-native-barcode-svg";
 
+import { Barcode } from "@/components/barcode";
 import { ScreenContainer } from "@/components/screen-container";
 import { VoiceInput } from "@/components/voice-input";
 import { Box, makeBarcode, makeId, Product, useApp, moveProductToBox, moveProductToGeneral } from "@/lib/local-store";
