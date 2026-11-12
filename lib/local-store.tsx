@@ -31,7 +31,9 @@ export type BoxItem = {
   id: string;
   productId: string;
   productName: string;
+  description?: string;
   quantity: number;
+  imageUri?: string | null;
   status: "available" | "consumed" | "removed";
   addedAt: string;
   consumedAt?: string;
@@ -98,7 +100,7 @@ const META_KEY = "emsir.app.backup.meta";
     return {
       ...previous,
       products: previous.products.filter((p) => p.id !== productId),
-      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, quantity: product.quantity, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
+      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
     };
   };
 
@@ -111,7 +113,7 @@ const META_KEY = "emsir.app.backup.meta";
       if (b.id !== boxId) return b;
       const item = b.items.find((i) => i.id === itemId);
       if (item) {
-        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: "منقول من صندوق", quantity: item.quantity, barcode: makeBarcode("product"), createdAt: now(), updatedAt: now() };
+        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: item.description || "منقول من صندوق", quantity: item.quantity, barcode: makeBarcode("product"), imageUri: item.imageUri ?? null, createdAt: now(), updatedAt: now() };
         return { ...b, items: b.items.filter((i) => i.id !== itemId), updatedAt: now() };
       }
       return b;
@@ -155,13 +157,22 @@ function normalizeData(input: Partial<AppData>): AppData {
     barcode: typeof (product as Partial<Product>).barcode === "string" && (product as Partial<Product>).barcode ? (product as Partial<Product>).barcode : makeBarcode("product"),
   })) as Product[];
   const boxesInput = Array.isArray(input.boxes) ? input.boxes : [];
-  const boxes = boxesInput.map((box) => ({
-    ...box,
-    barcode: typeof (box as Partial<Box>).barcode === "string" && (box as Partial<Box>).barcode ? (box as Partial<Box>).barcode : makeBarcode("box"),
-    name: typeof (box as Partial<Box>).name === "string" ? (box as Partial<Box>).name : "",
-    description: typeof (box as Partial<Box>).description === "string" ? (box as Partial<Box>).description : "",
-    items: Array.isArray((box as Partial<Box>).items) ? (box as Partial<Box>).items : [],
-  })) as Box[];
+  const boxes = boxesInput.map((box) => {
+    const rawItems = Array.isArray((box as Partial<Box>).items) ? (box as Partial<Box>).items : [];
+    const items = (rawItems as BoxItem[]).map((item) => ({
+      ...item,
+      description: typeof item.description === "string" ? item.description : "",
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      imageUri: item.imageUri ?? null,
+    }));
+    return {
+      ...box,
+      barcode: typeof (box as Partial<Box>).barcode === "string" && (box as Partial<Box>).barcode ? (box as Partial<Box>).barcode : makeBarcode("box"),
+      name: typeof (box as Partial<Box>).name === "string" ? (box as Partial<Box>).name : "",
+      description: typeof (box as Partial<Box>).description === "string" ? (box as Partial<Box>).description : "",
+      items,
+    };
+  }) as Box[];
   const consumerRecords = (Array.isArray(input.consumerRecords) ? input.consumerRecords : []).map((record) => ({
     ...record,
     consumedQuantity: Number.isFinite(Number((record as Partial<ConsumerRecord>).consumedQuantity)) ? Math.max(1, Number((record as Partial<ConsumerRecord>).consumedQuantity)) : 1,
