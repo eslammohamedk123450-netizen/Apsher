@@ -21,7 +21,29 @@ export type Product = {
   name: string;
   description: string;
   quantity: number;
+  barcode: string;
   imageUri?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BoxItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  status: "available" | "consumed" | "removed";
+  addedAt: string;
+  consumedAt?: string;
+};
+
+export type Box = {
+  id: string;
+  barcode: string;
+  name: string;
+  description: string;
+  imageUri?: string | null;
+  items: BoxItem[];
   createdAt: string;
   updatedAt: string;
 };
@@ -38,9 +60,10 @@ export type ConsumerRecord = {
 };
 
 export type AppData = {
-  version: 1;
+  version: 2;
   sections: Section[];
   products: Product[];
+  boxes: Box[];
   consumerRecords: ConsumerRecord[];
   updatedAt: string;
 };
@@ -70,9 +93,10 @@ const stamp = () => now().replace(/[.:]/g, "-");
 const documentRoot = () => FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
 
 export const emptyData = (): AppData => ({
-  version: 1,
+  version: 2,
   sections: [],
   products: [],
+  boxes: [],
   consumerRecords: [],
   updatedAt: now(),
 });
@@ -93,19 +117,31 @@ export const formatDate = (value: string) => {
 
 export const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+export const makeBarcode = (kind: "product" | "box") => `ABS-${kind === "product" ? "P" : "B"}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
 function normalizeData(input: Partial<AppData>): AppData {
   const products = (Array.isArray(input.products) ? input.products : []).map((product) => ({
     ...product,
     quantity: Number.isFinite(Number((product as Partial<Product>).quantity)) ? Math.max(0, Number((product as Partial<Product>).quantity)) : 1,
+    barcode: typeof (product as Partial<Product>).barcode === "string" && (product as Partial<Product>).barcode ? (product as Partial<Product>).barcode : makeBarcode("product"),
   })) as Product[];
+  const boxesInput = Array.isArray(input.boxes) ? input.boxes : [];
+  const boxes = boxesInput.map((box) => ({
+    ...box,
+    barcode: typeof (box as Partial<Box>).barcode === "string" && (box as Partial<Box>).barcode ? (box as Partial<Box>).barcode : makeBarcode("box"),
+    name: typeof (box as Partial<Box>).name === "string" ? (box as Partial<Box>).name : "",
+    description: typeof (box as Partial<Box>).description === "string" ? (box as Partial<Box>).description : "",
+    items: Array.isArray((box as Partial<Box>).items) ? (box as Partial<Box>).items : [],
+  })) as Box[];
   const consumerRecords = (Array.isArray(input.consumerRecords) ? input.consumerRecords : []).map((record) => ({
     ...record,
     consumedQuantity: Number.isFinite(Number((record as Partial<ConsumerRecord>).consumedQuantity)) ? Math.max(1, Number((record as Partial<ConsumerRecord>).consumedQuantity)) : 1,
   })) as ConsumerRecord[];
   return {
-    version: 1,
+    version: 2,
     sections: Array.isArray(input.sections) ? input.sections : [],
     products,
+    boxes,
     consumerRecords,
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : now(),
   };
@@ -259,8 +295,7 @@ export async function chooseProductImage() {
   if (!permission.granted) throw new Error("اسمح للتطبيق بالوصول إلى الصور لاختيار صورة المنتج");
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [1, 1],
+    allowsEditing: false,
     quality: 0.8,
   });
   if (result.canceled || !result.assets?.[0]) return null;

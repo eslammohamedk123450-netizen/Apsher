@@ -20,7 +20,7 @@ import { formatDate, makeId, Product, useApp } from "@/lib/local-store";
 const C = { navy: "#10253F", blue: "#2F78C9", blueLight: "#EAF3FC", orange: "#F59E0B", orangeLight: "#FFF6DD", bg: "#F6F8FB", white: "#FFFFFF", muted: "#68768A", border: "#DCE4EF", red: "#CF4B4B" };
 
 function ModalShell({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : undefined}><View style={styles.modal}><View style={styles.modalHeader}><Pressable onPress={onClose} style={styles.close}><Ionicons name="close" size={22} color={C.navy} /></Pressable><Text style={styles.modalTitle}>{title}</Text><View style={{ width: 40 }} /></View><ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">{children}</ScrollView></View></KeyboardAvoidingView></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}><View style={styles.modal}><View style={styles.modalHeader}><Pressable onPress={onClose} style={styles.close}><Ionicons name="close" size={22} color={C.navy} /></Pressable><Text style={styles.modalTitle}>{title}</Text><View style={{ width: 40 }} /></View><ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">{children}</ScrollView></View></KeyboardAvoidingView></Modal>;
 }
 
 export default function ConsumerScreen() {

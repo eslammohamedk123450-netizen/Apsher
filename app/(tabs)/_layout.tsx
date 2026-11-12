@@ -19,6 +19,8 @@ export default function TabLayout() {
   }}>
     <Tabs.Screen name="index" options={{ title: "الرئيسية", tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={size ?? 23} /> }} />
     <Tabs.Screen name="consumer" options={{ title: "المستهلك", tabBarIcon: ({ color, size }) => <Ionicons name="checkmark-done-outline" color={color} size={size ?? 23} /> }} />
+    <Tabs.Screen name="boxes" options={{ title: "الصناديق", tabBarIcon: ({ color, size }) => <Ionicons name="file-tray-full-outline" color={color} size={size ?? 23} /> }} />
+    <Tabs.Screen name="barcodes" options={{ title: "الباركود", tabBarIcon: ({ color, size }) => <Ionicons name="barcode-outline" color={color} size={size ?? 23} /> }} />
     <Tabs.Screen name="settings" options={{ title: "الإعدادات", tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size ?? 23} /> }} />
   </Tabs>;
 }

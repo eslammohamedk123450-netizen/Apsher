@@ -16,7 +16,8 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { formatDate, makeId, Product, useApp } from "@/lib/local-store";
+import { VoiceInput } from "@/components/voice-input";
+import { formatDate, makeBarcode, makeId, Product, useApp } from "@/lib/local-store";
 
 const COLORS = {
   navy: "#10253F",
@@ -46,7 +47,7 @@ const confirmAction = (title: string, message: string, action: () => void) => {
 function Field({ label, value, onChangeText, placeholder, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean }) {
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldHeader}><Text style={styles.fieldLabel}>{label}</Text><VoiceInput onText={onChangeText} /></View>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -63,7 +64,7 @@ function Field({ label, value, onChangeText, placeholder, multiline = false }: {
 function ModalShell({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Pressable onPress={onClose} style={styles.iconButton} accessibilityLabel="إغلاق">
@@ -156,6 +157,7 @@ export default function HomeScreen() {
           name: clean,
           description: productDescription.trim(),
           quantity,
+          barcode: editingProduct.barcode,
           imageUri: productImage,
           updatedAt: new Date().toISOString(),
         } : item),
@@ -170,6 +172,7 @@ export default function HomeScreen() {
           name: clean,
           description: productDescription.trim(),
           quantity,
+          barcode: makeBarcode("product"),
           imageUri: productImage,
           createdAt,
           updatedAt: createdAt,
@@ -302,10 +305,10 @@ export default function HomeScreen() {
 
       <ModalShell visible={Boolean(detailProduct)} title="تفاصيل المنتج" onClose={() => setDetailProduct(null)}>
         {detailProduct ? <>
-          {detailProduct.imageUri ? <Image source={{ uri: detailProduct.imageUri }} style={styles.detailImage} /> : <View style={styles.detailImagePlaceholder}><Ionicons name="cube-outline" size={42} color={COLORS.blue} /></View>}
+          {detailProduct.imageUri ? <Image source={{ uri: detailProduct.imageUri }} resizeMode="contain" style={styles.detailImage} /> : <View style={styles.detailImagePlaceholder}><Ionicons name="cube-outline" size={42} color={COLORS.blue} /></View>}
           <Text style={styles.detailName}>{detailProduct.name}</Text>
           <Text style={styles.detailSection}>{data.sections.find((item) => item.id === detailProduct.sectionId)?.name ?? "بدون قسم"}</Text>
-          <Text style={styles.stockBadge}>{detailProduct.quantity} قطعة متبقية</Text>
+          <Text style={styles.stockBadge}>{detailProduct.quantity} قطعة متبقية</Text><Text style={styles.barcodeText}>باركود: {detailProduct.barcode}</Text>
           <Text style={styles.detailDescription}>{detailProduct.description || "لا يوجد وصف مضاف لهذا المنتج."}</Text>
           <Text style={styles.detailDate}>أضيف في {formatDate(detailProduct.createdAt)}</Text>
           <View style={styles.actionRow}><Pressable style={styles.primaryButton} onPress={() => openEditProduct(detailProduct)}><Ionicons name="create-outline" size={18} color={COLORS.white} /><Text style={styles.primaryButtonText}>تعديل</Text></Pressable><Pressable style={styles.ghostButton} onPress={() => deleteProduct(detailProduct)}><Ionicons name="trash-outline" size={18} color={COLORS.red} /><Text style={styles.dangerText}>حذف</Text></Pressable></View>
@@ -321,7 +324,7 @@ function StatCard({ number, label, icon }: { number: number; label: string; icon
 
 function ProductCard({ product, sectionName, onPress, onEdit }: { product: Product; sectionName: string; onPress: () => void; onEdit: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.82 }]}>
-    {product.imageUri ? <Image source={{ uri: product.imageUri }} style={styles.productThumb} /> : <View style={styles.productThumbPlaceholder}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}
+    {product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="contain" style={styles.productThumb} /> : <View style={styles.productThumbPlaceholder}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}
     <View style={styles.productCopy}><Text style={styles.productName}>{product.name}</Text><Text style={styles.productSection}>{sectionName} · {product.quantity} قطعة متبقية</Text><Text style={styles.productDescription} numberOfLines={2}>{product.description || "بدون وصف"}</Text></View>
     <Pressable onPress={(event) => { event.stopPropagation(); onEdit(); }} style={styles.editButton}><Ionicons name="create-outline" size={18} color={COLORS.blue} /></Pressable>
   </Pressable>;
@@ -396,6 +399,7 @@ const styles = StyleSheet.create({
   modalContent: { padding: 18, gap: 15 },
   modalHint: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "right" },
   fieldWrap: { gap: 7 },
+  fieldHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   fieldLabel: { color: COLORS.navy, fontSize: 13, fontWeight: "800", textAlign: "right" },
   input: { backgroundColor: COLORS.white, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 14, color: COLORS.navy, fontSize: 14 },
   multiline: { minHeight: 92, paddingTop: 13, textAlignVertical: "top" },
@@ -407,6 +411,7 @@ const styles = StyleSheet.create({
   detailImagePlaceholder: { height: 150, borderRadius: 18, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
   detailName: { color: COLORS.navy, fontSize: 23, fontWeight: "800", textAlign: "right" },
   detailSection: { color: COLORS.blue, fontSize: 13, fontWeight: "800", textAlign: "right" },
+  barcodeText: { color: COLORS.muted, fontSize: 11, textAlign: "right" },
   stockBadge: { alignSelf: "flex-end", color: COLORS.green, backgroundColor: "#ECF8F3", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, fontWeight: "900" },
   detailDescription: { color: COLORS.muted, fontSize: 14, lineHeight: 22, textAlign: "right" },
   detailDate: { color: COLORS.muted, fontSize: 12, textAlign: "right" },

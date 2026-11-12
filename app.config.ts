@@ -106,6 +106,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-asset",
+    ["expo-camera", { cameraPermission: "اسمح لتطبيق أبشر باستخدام الكاميرا لمسح الباركود." }],
     "expo-sharing",
     "expo-router",
     [
