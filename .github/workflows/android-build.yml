@@ -36,11 +36,27 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Enable Multidex
+        run: |
+          python3 << 'PY'
+          import pathlib
+          p = pathlib.Path("android/app/build.gradle")
+          t = p.read_text()
+          # شغل الـ multidex جوه defaultConfig
+          if "multiDexEnabled" not in t:
+              t = t.replace("minSdkVersion", "multiDexEnabled true\n        minSdkVersion")
+          # ضيف مكتبة الـ multidex
+          if "androidx.multidex" not in t:
+              t = t.replace("dependencies {", "dependencies {\n    implementation 'androidx.multidex:multidex:2.0.1'")
+          p.write_text(t)
+          print("Multidex enabled")
+          PY
+
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
       - name: Build APK
-        run: cd android && ./gradlew assembleRelease
+        run: cd android && ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
