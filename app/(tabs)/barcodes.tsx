@@ -27,11 +27,14 @@ export default function BarcodesScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const entries = useMemo<Entry[]>(() => (kind === "product"
-    ? data.products.map((item) => ({ id: item.id, type: "product" as const, name: item.name, barcode: item.barcode, description: item.description }))
+    ? [
+        ...data.products.map((item) => ({ id: `product-${item.id}`, type: "product" as const, name: item.name, barcode: item.barcode, description: item.description })),
+        ...data.boxes.flatMap((box) => box.items.map((item) => ({ id: `box-item-${box.id}-${item.id}`, type: "product" as const, name: item.productName, barcode: item.barcode, description: [item.description, box.name ? `داخل ${box.name}` : "داخل صندوق"].filter(Boolean).join(" · ") }))),
+      ]
     : data.boxes.map((item) => ({ id: item.id, type: "box" as const, name: item.name || "صندوق بدون اسم", barcode: item.barcode, description: item.description }))
   ).filter((item) => [item.name, item.barcode, item.description ?? ""].some((value) => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))), [data.products, data.boxes, kind, search]);
 
-  const switchKind = (next: "product" | "box") => { if (next !== kind) { setKind(next); setSelected([]); } };
+  const switchKind = (next: "product" | "box") => { if (next !== kind) { setKind(next); setSelected([]); setSearch(""); } };
 
   const toggle = (id: string) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const selectedEntries = selected.length ? entries.filter((entry) => selected.includes(entry.id)) : entries;
@@ -51,10 +54,16 @@ export default function BarcodesScreen() {
   };
 
   const onScan = ({ data: value }: { data: string }) => {
-    const found = [...data.products, ...data.boxes].find((item) => item.barcode === value);
-    setSearch(found ? ("name" in found ? found.name : value) : value);
+    const scanned = value.trim();
+    const foundProduct = data.products.find((item) => item.barcode === scanned);
+    const foundBoxItem = data.boxes.flatMap((box) => box.items).find((item) => item.barcode === scanned);
+    const foundBox = data.boxes.find((item) => item.barcode === scanned);
+    const foundKind = foundBox ? "box" : foundProduct || foundBoxItem ? "product" : null;
+    if (foundKind) setKind(foundKind);
+    setSelected([]);
+    setSearch(scanned);
     setScannerOpen(false);
-    if (!found) Alert.alert("باركود غير معروف", "هذا الباركود غير مسجل في التطبيق.");
+    if (!foundKind) Alert.alert("باركود غير معروف", "هذا الباركود غير مسجل في التطبيق.");
   };
 
   return <ScreenContainer><ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
