@@ -14,7 +14,7 @@ const confirmImport = (message: string, action: () => void) => {
 };
 
 export default function SettingsScreen() {
-  const { data, autoStatus, pin, biometricEnabled, exportCurrent, exportZip, importZip, setPin, setBiometric } = useApp();
+  const { data, autoStatus, pin, biometricEnabled, exportCurrent, exportZip, importZip, importAsBox, setPin, setBiometric } = useApp();
   const [pinModal, setPinModal] = useState(false);
   const [pinValue, setPinValue] = useState("");
   const [busy, setBusy] = useState("");
@@ -51,6 +51,19 @@ export default function SettingsScreen() {
     setMessage("تم إيقاف حماية التطبيق.");
   };
 
+  const importBox = async () => {
+    setBusy("استيراد صندوق");
+    setMessage("");
+    try {
+      const result = await importAsBox();
+      setMessage(result ? `تم استيراد الملف كصندوق جديد: ${result}` : "تم إلغاء الاستيراد.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ملف غير صالح");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const restore = () => confirmImport("سيتم استبدال البيانات الحالية بالنسخة التي تختارها. هل تريد المتابعة؟", async () => {
     setBusy("استرداد");
     try {
@@ -75,6 +88,8 @@ export default function SettingsScreen() {
       <SettingRow icon="archive-outline" title="تصدير كل البيانات ZIP" description="يشمل الأقسام والمنتجات والصور وسجل المستهلك" onPress={() => void run("ZIP", exportZip)} busy={busy === "ZIP"} accent />
       <View style={styles.separator} />
       <SettingRow icon="cloud-upload-outline" title="استرداد نسخة ZIP" description="استيراد نسخة من هذا الجهاز أو جهاز آخر" onPress={restore} busy={busy === "استرداد"} />
+      <View style={styles.separator} />
+      <SettingRow icon="file-tray-full-outline" title="استيراد أي ملف كصندوق" description="أي ملف ZIP أو JSON يتحول إلى صندوق جديد بمنتجاته" onPress={() => void importBox()} busy={busy === "استيراد صندوق"} />
     </View>
     {message ? <View style={styles.message}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.messageText}>{message}</Text></View> : null}
 

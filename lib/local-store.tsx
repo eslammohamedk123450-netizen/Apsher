@@ -78,6 +78,7 @@ type AppContextValue = {
   exportCurrent: () => Promise<string | null>;
   exportZip: () => Promise<string | null>;
   importZip: () => Promise<boolean>;
+  importAsBox: () => Promise<string | null>;
   setPin: (value: string | null) => Promise<void>;
   setBiometric: (value: boolean) => Promise<void>;
   authenticateBiometric: () => Promise<boolean>;
@@ -318,6 +319,35 @@ export async function importDataZip() {
   return imported;
 }
 
+// استيراد أي ملف (ZIP أو JSON) وتحويل محتواه إلى صندوق جديد
+export async function parseImportedProducts(): Promise<{ boxName: string; products: Array<{ name: string; quantity: number }> } | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["application/zip", "application/x-zip-compressed", "application/json", "application/octet-stream"],
+    copyToCacheDirectory: true,
+    multiple: false,
+    base64: true,
+  });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const asset = result.assets[0];
+  const base64 = asset.base64?.replace(/^data:.*base64,/, "") ?? (await uriToBase64(asset.uri));
+  let raw: Partial<AppData> | null = null;
+  try {
+    const zip = await JSZip.loadAsync(base64, { base64: true });
+    const dataFile = zip.file("data.json");
+    if (dataFile) raw = JSON.parse(await dataFile.async("string"));
+  } catch { raw = null; }
+  if (!raw) {
+    try {
+      if (Platform.OS === "web") raw = JSON.parse(atob(base64));
+      else raw = JSON.parse(await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 }));
+    } catch { raw = null; }
+  }
+  if (!raw) throw new Error("تعذر قراءة الملف. تأكد أنه ملف ZIP أو JSON مصدّر من أبشر.");
+  const products = Array.isArray(raw.products) ? raw.products : [];
+  const boxName = String(asset.name ?? "صندوق مستورد").replace(/\.(zip|json)$/i, "") || "صندوق مستورد";
+  return { boxName, products: products.map((entry) => ({ name: String((entry as { name?: unknown })?.name ?? "منتج"), quantity: Math.max(1, Number((entry as { quantity?: unknown })?.quantity) || 1) })) };
+}
+
 export async function chooseProductImage() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) throw new Error("اسمح للتطبيق بالوصول إلى الصور لاختيار صورة المنتج");
@@ -413,6 +443,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, []);
 
+  const importAsBox = useCallback(async () => {
+    const parsed = await parseImportedProducts();
+    if (!parsed) return null;
+    const items = parsed.products.map((product) => ({ id: makeId("box-item"), productId: makeId("imported"), productName: product.name, quantity: product.quantity, status: "available" as const, addedAt: now() }));
+    const box = { id: makeId("box"), barcode: makeBarcode("box"), name: parsed.boxName, description: "استيراد من ملف", items, createdAt: now(), updatedAt: now() };
+    const next = normalizeData({ ...data, boxes: [...data.boxes, box] });
+    next.updatedAt = now();
+    setData(next);
+    await persist(next);
+    setAutoStatus(`تم استيراد صندوق · ${formatDate(now())}`);
+    return `${box.name} (${items.length} عنصر)`;
+  }, [data]);
+
   const setPin = useCallback(async (value: string | null) => {
     if (Platform.OS === "web") {
       if (value) await AsyncStorage.setItem(PIN_KEY, value);
@@ -453,11 +496,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     exportCurrent,
     exportZip,
     importZip,
+    importAsBox,
     setPin,
     setBiometric,
     authenticateBiometric,
     pickImage: chooseProductImage,
-  }), [data, ready, autoStatus, pin, biometricEnabled, commit, exportCurrent, exportZip, importZip, setPin, setBiometric, authenticateBiometric]);
+  }), [data, ready, autoStatus, pin, biometricEnabled, commit, exportCurrent, exportZip, importZip, importAsBox, setPin, setBiometric, authenticateBiometric]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
