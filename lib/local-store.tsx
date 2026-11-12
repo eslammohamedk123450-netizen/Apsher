@@ -88,7 +88,35 @@ const DATA_KEY = "emsir.app.data.v1";
 const PIN_KEY = "emsir.app.pin";
 const BIOMETRIC_KEY = "emsir.app.biometric";
 const META_KEY = "emsir.app.backup.meta";
-const now = () => new Date().toISOString();
+  const now = () => new Date().toISOString();
+  
+  // نقل منتج من العام إلى الصندوق (حذف من العام، إضافة للصندوق)
+  export const moveProductToBox = (productId: string, boxId: string) => (previous: AppData): AppData => {
+    const product = previous.products.find((p) => p.id === productId);
+    if (!product) return previous;
+    return {
+      ...previous,
+      products: previous.products.filter((p) => p.id !== productId),
+      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, quantity: product.quantity, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
+    };
+  };
+
+  // نقل منتج من الصندوق إلى العام (حذف من الصندوق، إضافة للعام)
+  export const moveProductToGeneral = (boxId: string, itemId: string) => (previous: AppData): AppData => {
+    const fallbackSectionId = previous.sections[0]?.id ?? makeId("section");
+    const sections = previous.sections.length ? previous.sections : [...previous.sections, { id: fallbackSectionId, name: "منقول من الصناديق", createdAt: now() }];
+    let movedProduct: Product | null = null;
+    const nextBoxes = previous.boxes.map((b) => {
+      if (b.id !== boxId) return b;
+      const item = b.items.find((i) => i.id === itemId);
+      if (item) {
+        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: "منقول من صندوق", quantity: item.quantity, barcode: makeBarcode("product"), createdAt: now(), updatedAt: now() };
+        return { ...b, items: b.items.filter((i) => i.id !== itemId), updatedAt: now() };
+      }
+      return b;
+    });
+    return { ...previous, sections, products: movedProduct ? [...previous.products, movedProduct] : previous.products, boxes: nextBoxes };
+  };
 const stamp = () => now().replace(/[.:]/g, "-");
 const documentRoot = () => FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
 
