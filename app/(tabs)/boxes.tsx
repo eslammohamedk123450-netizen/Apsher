@@ -29,7 +29,7 @@ export default function BoxesScreen() {
   const openNew = () => { setSelected(null); setName(""); setDescription(""); setImageUri(null); setModalOpen(true); };
   const saveBox = async () => { const now = new Date().toISOString(); await commit((previous) => ({ ...previous, boxes: [...previous.boxes, { id: makeId("box"), barcode: makeBarcode("box"), name: name.trim(), description: description.trim(), imageUri, items: [], createdAt: now, updatedAt: now }] })); setModalOpen(false); };
   
-  const addProduct = async (product: Product) => { if (!selected) return; const updater = await moveProductToBox(product.id, selected.id); await commit(updater); setSelected((prev) => prev ? { ...prev, items: [...prev.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, barcode: product.barcode, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: new Date().toISOString() }] } : prev); };
+  const addProduct = async (product: Product) => { if (!selected) return; const updater = await moveProductToBox(product.id, selected.id); await commit(updater); setSelected((prev) => prev ? { ...prev, items: [...prev.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: new Date().toISOString() }] } : prev); };
   
   const consumeItem = async (itemId: string) => { 
     if (!selected) return; 
@@ -50,7 +50,7 @@ export default function BoxesScreen() {
       await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: box.items.map((item) => item.id === editingItemId ? { ...item, productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage } : item), updatedAt: new Date().toISOString() } : box) }));
       setSelected((prev) => prev ? { ...prev, items: prev.items.map((item) => item.id === editingItemId ? { ...item, productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage } : item) } : prev);
     } else {
-      const item = { id: makeId("box-private"), productId: makeId("private-product"), productName: privateProductName.trim(), barcode: makeBarcode("product"), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage, status: "available" as const, addedAt: new Date().toISOString() };
+      const item = { id: makeId("box-private"), productId: makeId("private-product"), productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage, status: "available" as const, addedAt: new Date().toISOString() };
       await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: [...box.items, item], updatedAt: new Date().toISOString() } : box) }));
       setSelected((prev) => prev ? { ...prev, items: [...prev.items, item] } : prev);
     }

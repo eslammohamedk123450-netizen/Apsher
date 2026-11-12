@@ -31,7 +31,6 @@ export type BoxItem = {
   id: string;
   productId: string;
   productName: string;
-  barcode: string;
   description?: string;
   quantity: number;
   imageUri?: string | null;
@@ -101,7 +100,7 @@ const META_KEY = "emsir.app.backup.meta";
     return {
       ...previous,
       products: previous.products.filter((p) => p.id !== productId),
-      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, barcode: product.barcode, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
+      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
     };
   };
 
@@ -114,7 +113,7 @@ const META_KEY = "emsir.app.backup.meta";
       if (b.id !== boxId) return b;
       const item = b.items.find((i) => i.id === itemId);
       if (item) {
-        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: item.description || "منقول من صندوق", quantity: item.quantity, barcode: item.barcode, imageUri: item.imageUri ?? null, createdAt: now(), updatedAt: now() };
+        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: item.description || "منقول من صندوق", quantity: item.quantity, barcode: makeBarcode("product"), imageUri: item.imageUri ?? null, createdAt: now(), updatedAt: now() };
         return { ...b, items: b.items.filter((i) => i.id !== itemId), updatedAt: now() };
       }
       return b;
@@ -151,11 +150,6 @@ export const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random
 
 export const makeBarcode = (kind: "product" | "box") => `ABS-${kind === "product" ? "P" : "B"}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-const stableBarcodeFor = (kind: "product" | "box", id: string) => {
-  const safeId = id.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(-20) || "LEGACY";
-  return `ABS-${kind === "product" ? "P" : "B"}-${safeId}`;
-};
-
 function normalizeData(input: Partial<AppData>): AppData {
   const products = (Array.isArray(input.products) ? input.products : []).map((product) => ({
     ...product,
@@ -167,10 +161,10 @@ function normalizeData(input: Partial<AppData>): AppData {
     const rawItems = Array.isArray((box as Partial<Box>).items) ? (box as Partial<Box>).items : [];
     const items = (rawItems as Partial<BoxItem>[]).map((item) => {
       const id = typeof item.id === "string" && item.id ? item.id : makeId("box-item");
+      const { barcode: _legacyIndividualBarcode, ...itemWithoutBarcode } = item as Partial<BoxItem> & { barcode?: string };
       return {
-        ...item,
+        ...itemWithoutBarcode,
         id,
-        barcode: typeof item.barcode === "string" && item.barcode ? item.barcode : stableBarcodeFor("product", id),
         description: typeof item.description === "string" ? item.description : "",
         quantity: Math.max(1, Number(item.quantity) || 1),
         imageUri: item.imageUri ?? null,
@@ -468,7 +462,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const importAsBox = useCallback(async () => {
     const parsed = await parseImportedProducts();
     if (!parsed) return null;
-    const items = parsed.products.map((product) => ({ id: makeId("box-item"), productId: makeId("imported"), productName: product.name, barcode: makeBarcode("product"), quantity: product.quantity, status: "available" as const, addedAt: now() }));
+    const items = parsed.products.map((product) => ({ id: makeId("box-item"), productId: makeId("imported"), productName: product.name, quantity: product.quantity, status: "available" as const, addedAt: now() }));
     const box = { id: makeId("box"), barcode: makeBarcode("box"), name: parsed.boxName, description: "استيراد من ملف", items, createdAt: now(), updatedAt: now() };
     const next = normalizeData({ ...data, boxes: [...data.boxes, box] });
     next.updatedAt = now();

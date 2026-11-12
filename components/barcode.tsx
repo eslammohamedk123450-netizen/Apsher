@@ -17,6 +17,16 @@ type Encoder = {
   encode: () => { data: string };
 };
 
+export function getCode128Bits(value: string) {
+  if (!value) return "";
+  try {
+    const encoder = new (Code128Auto as unknown as new (text: string, options: Record<string, unknown>) => Encoder)(value, {});
+    return encoder.valid() ? encoder.encode().data : "";
+  } catch {
+    return "";
+  }
+}
+
 export function Barcode({
   value,
   height = 48,
@@ -26,13 +36,7 @@ export function Barcode({
   backgroundColor = "#FFFFFF",
 }: BarcodeProps) {
   const bits = useMemo(() => {
-    if (!value) return "";
-    try {
-      const encoder = new (Code128Auto as unknown as new (text: string, options: Record<string, unknown>) => Encoder)(value, {});
-      return encoder.valid() ? encoder.encode().data : "";
-    } catch {
-      return "";
-    }
+    return getCode128Bits(value);
   }, [value]);
 
   if (!bits) return null;
