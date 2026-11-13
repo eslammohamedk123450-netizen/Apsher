@@ -1,44 +1,204 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Svg, { Line, Polygon } from "react-native-svg";
 import { Barcode } from "@/components/barcode";
 import { ScreenContainer } from "@/components/screen-container";
 import { VoiceInput } from "@/components/voice-input";
-import { Box, makeBarcode, makeId, Product, useApp, moveProductToBox, moveProductToGeneral } from "@/lib/local-store";
+import {
+  Box,
+  BoxItem,
+  makeBarcode,
+  makeId,
+  Product,
+  useApp,
+  moveProductToBox,
+  moveProductToGeneral,
+} from "@/lib/local-store";
 
-const C = { navy: "#10253F", blue: "#2F78C9", blueLight: "#EAF3FC", bg: "#F6F8FB", white: "#FFFFFF", muted: "#68768A", border: "#DCE4EF", orange: "#F59E0B", green: "#16846E", red: "#CF4B4B" };
+const C = {
+  navy: "#10253F",
+  blue: "#2F78C9",
+  blueLight: "#EAF3FC",
+  bg: "#F6F8FB",
+  white: "#FFFFFF",
+  muted: "#68768A",
+  border: "#DCE4EF",
+  orange: "#F59E0B",
+  green: "#16846E",
+  red: "#CF4B4B",
+};
 
-function Field({ label, value, onChangeText, placeholder, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean }) { 
-  return <View style={styles.field}><View style={styles.fieldHeader}><Text style={styles.label}>{label}</Text><VoiceInput onText={onChangeText} /></View><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#9AA7B8" multiline={multiline} style={[styles.input, multiline && styles.multiline]} textAlign="right" /></View>; 
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      <View style={styles.fieldHeader}>
+        <Text style={styles.label}>{label}</Text>
+        <VoiceInput onText={onChangeText} />
+      </View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#9AA7B8"
+        multiline={multiline}
+        style={[styles.input, multiline && styles.multiline]}
+        textAlign="right"
+      />
+    </View>
+  );
 }
 
 function BoxIllustration() {
-  return <Svg width="76%" height="76%" viewBox="0 0 120 110">
-    <Polygon points="60,8 108,31 60,54 12,31" fill="#F7D99B" />
-    <Polygon points="12,31 60,54 60,102 12,78" fill="#D99A4A" />
-    <Polygon points="60,54 108,31 108,78 60,102" fill="#B96F2D" />
-    <Polygon points="50,13 70,23 60,29 40,19" fill="#FFF0C9" />
-    <Polygon points="40,19 60,29 60,54 40,44" fill="#EBC174" />
-    <Polygon points="60,29 70,23 70,48 60,54" fill="#DDA951" />
-    <Line x1="21" y1="42" x2="21" y2="74" stroke="#E9B768" strokeWidth="2" />
-    <Line x1="99" y1="42" x2="99" y2="74" stroke="#D9924C" strokeWidth="2" />
-  </Svg>;
+  return (
+    <Svg width="76%" height="76%" viewBox="0 0 120 110">
+      <Polygon points="60,8 108,31 60,54 12,31" fill="#F7D99B" />
+      <Polygon points="12,31 60,54 60,102 12,78" fill="#D99A4A" />
+      <Polygon points="60,54 108,31 108,78 60,102" fill="#B96F2D" />
+      <Polygon points="50,13 70,23 60,29 40,19" fill="#FFF0C9" />
+      <Polygon points="40,19 60,29 60,54 40,44" fill="#EBC174" />
+      <Polygon points="60,29 70,23 70,48 60,54" fill="#DDA951" />
+      <Line x1="21" y1="42" x2="21" y2="74" stroke="#E9B768" strokeWidth="2" />
+      <Line x1="99" y1="42" x2="99" y2="74" stroke="#D9924C" strokeWidth="2" />
+    </Svg>
+  );
+}
+
+function BoxItemRow({
+  item,
+  focused,
+  onConsume,
+  onEdit,
+  onExport,
+  onRemove,
+}: {
+  item: BoxItem;
+  focused: boolean;
+  onConsume: () => void;
+  onEdit: () => void;
+  onExport: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View
+      style={[
+        styles.item,
+        item.status !== "available" && styles.itemConsumed,
+        focused && { borderColor: C.orange, borderWidth: 2 },
+      ]}
+    >
+      {item.imageUri ? (
+        <Image
+          source={{ uri: item.imageUri }}
+          resizeMode="contain"
+          style={styles.itemImage}
+        />
+      ) : (
+        <View style={[styles.itemImage, styles.itemImageEmpty]}>
+          <Ionicons name="cube-outline" size={22} color={C.blue} />
+        </View>
+      )}
+      <View style={styles.itemCopy}>
+        <Text
+          style={[
+            styles.itemName,
+            item.status !== "available" && styles.strike,
+          ]}
+        >
+          {item.productName} ({item.quantity})
+        </Text>
+        {item.description ? (
+          <Text style={styles.itemDesc} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
+        <Text style={styles.itemStatus}>
+          {item.status === "available" ? "متاح" : "مستهلك"}
+        </Text>
+      </View>
+      <View style={styles.itemActions}>
+        {item.status === "available" ? (
+          <>
+            <Pressable style={styles.consumeButton} onPress={onConsume}>
+              <Text style={styles.consumeText}>استهلاك</Text>
+            </Pressable>
+            <Pressable style={styles.editButton} onPress={onEdit}>
+              <Text style={styles.exportText}>تعديل</Text>
+            </Pressable>
+            <Pressable style={styles.exportButton} onPress={onExport}>
+              <Text style={styles.exportText}>للعام</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Ionicons name="checkmark-circle" size={22} color={C.green} />
+        )}
+        <Pressable style={styles.deleteButton} onPress={onRemove}>
+          <Text style={styles.deleteText}>حذف</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 export default function BoxesScreen() {
   const { data, commit, pickImage } = useApp();
-  const { boxId } = useLocalSearchParams<{ boxId?: string }>();
+  const { boxId, itemId } = useLocalSearchParams<{
+    boxId?: string;
+    itemId?: string;
+  }>();
   const router = useRouter();
   const [selected, setSelected] = useState<Box | null>(null);
-  
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!boxId) return;
     const box = data.boxes.find((item) => item.id === boxId);
-    if (box) setSelected(box);
-    router.setParams({ boxId: undefined });
-  }, [boxId, data.boxes, router]);
+    if (box) {
+      const focusedItem = itemId
+        ? box.items.find((item) => item.id === itemId)
+        : undefined;
+      // A deep link must initialize the modal target after the matching local data is available.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFocusedItemId(focusedItem?.id ?? null);
+      setSelected(
+        focusedItem
+          ? {
+              ...box,
+              items: [
+                focusedItem,
+                ...box.items.filter((item) => item.id !== focusedItem.id),
+              ],
+            }
+          : box,
+      );
+    }
+    router.setParams({ boxId: undefined, itemId: undefined });
+  }, [boxId, itemId, data.boxes, router]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -47,53 +207,883 @@ export default function BoxesScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [privateProductOpen, setPrivateProductOpen] = useState(false);
   const [privateProductName, setPrivateProductName] = useState("");
-  const [privateProductDescription, setPrivateProductDescription] = useState("");
+  const [privateProductDescription, setPrivateProductDescription] =
+    useState("");
   const [privateProductQuantity, setPrivateProductQuantity] = useState("1");
-  const [privateProductImage, setPrivateProductImage] = useState<string | null>(null);
+  const [privateProductImage, setPrivateProductImage] = useState<string | null>(
+    null,
+  );
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
-  const openNew = () => { setSelected(null); setName(""); setDescription(""); setImageUri(null); setModalOpen(true); };
-  const saveBox = async () => { const now = new Date().toISOString(); await commit((previous) => ({ ...previous, boxes: [...previous.boxes, { id: makeId("box"), barcode: makeBarcode("box"), name: name.trim(), description: description.trim(), imageUri, items: [], createdAt: now, updatedAt: now }] })); setModalOpen(false); };
-  const addProduct = async (product: Product) => { if (!selected) return; const updater = await moveProductToBox(product.id, selected.id); await commit(updater); setSelected((prev) => prev ? { ...prev, items: [...prev.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: new Date().toISOString() }] } : prev); };
-  const consumeItem = async (itemId: string) => { 
-    if (!selected) return; 
-    const now = new Date().toISOString(); 
-    await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: box.items.map((item) => item.id === itemId ? { ...item, status: "consumed" as const, consumedAt: now } : item), updatedAt: now } : box) })); 
-    setSelected((current) => current ? { ...current, items: current.items.map((item) => item.id === itemId ? { ...item, status: "consumed" as const, consumedAt: now } : item) } : current); 
+  const openNew = () => {
+    setSelected(null);
+    setName("");
+    setDescription("");
+    setImageUri(null);
+    setModalOpen(true);
   };
-  const exportToGeneral = async (item: any) => { if (!selected) return; const updater = await moveProductToGeneral(selected.id, item.id); await commit(updater); setSelected((prev) => prev ? { ...prev, items: prev.items.filter(i => i.id !== item.id) } : prev); };
-  const removeItem = async (itemId: string) => { if (!selected) return; await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: box.items.filter((item) => item.id !== itemId), updatedAt: new Date().toISOString() } : box) })); setSelected((prev) => prev ? { ...prev, items: prev.items.filter(i => i.id !== itemId) } : prev); };
-  const resetPrivateForm = () => { setPrivateProductName(""); setPrivateProductDescription(""); setPrivateProductQuantity("1"); setPrivateProductImage(null); setEditingItemId(null); setPrivateProductOpen(false); };
-  const openEditItem = (item: any) => { setEditingItemId(item.id); setPrivateProductName(item.productName); setPrivateProductDescription(item.description ?? ""); setPrivateProductQuantity(String(item.quantity ?? 1)); setPrivateProductImage(item.imageUri ?? null); setPrivateProductOpen(true); };
+  const deleteSelectedBox = () => {
+    if (!selected) return;
+    const boxToDelete = selected;
+    const remove = () => {
+      void commit((previous) => ({
+        ...previous,
+        boxes: previous.boxes.filter((box) => box.id !== boxToDelete.id),
+      }));
+      setSelected(null);
+      setFocusedItemId(null);
+    };
+    const message = `سيتم حذف الصندوق «${boxToDelete.name || "بدون اسم"}» وكل العناصر الموجودة بداخله. لا يمكن التراجع عن هذه العملية.`;
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(message)) remove();
+    } else
+      Alert.alert("حذف الصندوق", message, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "حذف", style: "destructive", onPress: remove },
+      ]);
+  };
+  const saveBox = async () => {
+    const now = new Date().toISOString();
+    await commit((previous) => ({
+      ...previous,
+      boxes: [
+        ...previous.boxes,
+        {
+          id: makeId("box"),
+          barcode: makeBarcode("box"),
+          name: name.trim(),
+          description: description.trim(),
+          imageUri,
+          items: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }));
+    setModalOpen(false);
+  };
+  const addProduct = async (product: Product) => {
+    if (!selected) return;
+    const updater = await moveProductToBox(product.id, selected.id);
+    await commit(updater);
+    setSelected((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: [
+              ...prev.items,
+              {
+                id: makeId("box-item"),
+                productId: product.id,
+                productName: product.name,
+                description: product.description,
+                quantity: product.quantity,
+                imageUri: product.imageUri ?? null,
+                barcodeAliases: product.barcode ? [product.barcode] : [],
+                status: "available" as const,
+                addedAt: new Date().toISOString(),
+              },
+            ],
+          }
+        : prev,
+    );
+  };
+  const consumeItem = async (itemId: string) => {
+    if (!selected) return;
+    const now = new Date().toISOString();
+    await commit((previous) => ({
+      ...previous,
+      boxes: previous.boxes.map((box) =>
+        box.id === selected.id
+          ? {
+              ...box,
+              items: box.items.map((item) =>
+                item.id === itemId
+                  ? { ...item, status: "consumed" as const, consumedAt: now }
+                  : item,
+              ),
+              updatedAt: now,
+            }
+          : box,
+      ),
+    }));
+    setSelected((current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((item) =>
+              item.id === itemId
+                ? { ...item, status: "consumed" as const, consumedAt: now }
+                : item,
+            ),
+          }
+        : current,
+    );
+  };
+  const exportToGeneral = async (item: any) => {
+    if (!selected) return;
+    const updater = await moveProductToGeneral(selected.id, item.id);
+    await commit(updater);
+    setSelected((prev) =>
+      prev
+        ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) }
+        : prev,
+    );
+  };
+  const removeItem = async (itemId: string) => {
+    if (!selected) return;
+    await commit((previous) => ({
+      ...previous,
+      boxes: previous.boxes.map((box) =>
+        box.id === selected.id
+          ? {
+              ...box,
+              items: box.items.filter((item) => item.id !== itemId),
+              updatedAt: new Date().toISOString(),
+            }
+          : box,
+      ),
+    }));
+    setSelected((prev) =>
+      prev
+        ? { ...prev, items: prev.items.filter((i) => i.id !== itemId) }
+        : prev,
+    );
+  };
+  const confirmRemoveItem = (item: BoxItem) => {
+    const remove = () => void removeItem(item.id);
+    const message = `إزالة «${item.productName}» من هذا الصندوق؟`;
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(message)) remove();
+    } else
+      Alert.alert("إزالة منتج من الصندوق", message, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "إزالة", style: "destructive", onPress: remove },
+      ]);
+  };
+  const resetPrivateForm = () => {
+    setPrivateProductName("");
+    setPrivateProductDescription("");
+    setPrivateProductQuantity("1");
+    setPrivateProductImage(null);
+    setEditingItemId(null);
+    setPrivateProductOpen(false);
+  };
+  const openEditItem = (item: any) => {
+    setEditingItemId(item.id);
+    setPrivateProductName(item.productName);
+    setPrivateProductDescription(item.description ?? "");
+    setPrivateProductQuantity(String(item.quantity ?? 1));
+    setPrivateProductImage(item.imageUri ?? null);
+    setPrivateProductOpen(true);
+  };
   const addPrivateProduct = async () => {
     if (!selected || !privateProductName.trim()) return;
     if (editingItemId) {
-      await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: box.items.map((item) => item.id === editingItemId ? { ...item, productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage } : item), updatedAt: new Date().toISOString() } : box) }));
-      setSelected((prev) => prev ? { ...prev, items: prev.items.map((item) => item.id === editingItemId ? { ...item, productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage } : item) } : prev);
+      await commit((previous) => ({
+        ...previous,
+        boxes: previous.boxes.map((box) =>
+          box.id === selected.id
+            ? {
+                ...box,
+                items: box.items.map((item) =>
+                  item.id === editingItemId
+                    ? {
+                        ...item,
+                        productName: privateProductName.trim(),
+                        description: privateProductDescription.trim(),
+                        quantity: Math.max(
+                          1,
+                          Number(privateProductQuantity) || 1,
+                        ),
+                        imageUri: privateProductImage,
+                      }
+                    : item,
+                ),
+                updatedAt: new Date().toISOString(),
+              }
+            : box,
+        ),
+      }));
+      setSelected((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((item) =>
+                item.id === editingItemId
+                  ? {
+                      ...item,
+                      productName: privateProductName.trim(),
+                      description: privateProductDescription.trim(),
+                      quantity: Math.max(
+                        1,
+                        Number(privateProductQuantity) || 1,
+                      ),
+                      imageUri: privateProductImage,
+                    }
+                  : item,
+              ),
+            }
+          : prev,
+      );
     } else {
-      const item = { id: makeId("box-private"), productId: makeId("private-product"), productName: privateProductName.trim(), description: privateProductDescription.trim(), quantity: Math.max(1, Number(privateProductQuantity) || 1), imageUri: privateProductImage, status: "available" as const, addedAt: new Date().toISOString() };
-      await commit((previous) => ({ ...previous, boxes: previous.boxes.map((box) => box.id === selected.id ? { ...box, items: [...box.items, item], updatedAt: new Date().toISOString() } : box) }));
-      setSelected((prev) => prev ? { ...prev, items: [...prev.items, item] } : prev);
+      const item = {
+        id: makeId("box-private"),
+        productId: makeId("private-product"),
+        productName: privateProductName.trim(),
+        description: privateProductDescription.trim(),
+        quantity: Math.max(1, Number(privateProductQuantity) || 1),
+        imageUri: privateProductImage,
+        barcodeAliases: [makeBarcode("product")],
+        status: "available" as const,
+        addedAt: new Date().toISOString(),
+      };
+      await commit((previous) => ({
+        ...previous,
+        boxes: previous.boxes.map((box) =>
+          box.id === selected.id
+            ? {
+                ...box,
+                items: [...box.items, item],
+                updatedAt: new Date().toISOString(),
+              }
+            : box,
+        ),
+      }));
+      setSelected((prev) =>
+        prev ? { ...prev, items: [...prev.items, item] } : prev,
+      );
     }
     resetPrivateForm();
   };
-  const availableProducts = data.products.filter((product) => [product.name, product.description].some((value) => value.toLocaleLowerCase().includes(productSearch.toLocaleLowerCase())));
+  const availableProducts = data.products.filter((product) =>
+    [product.name, product.description].some((value) =>
+      value.toLocaleLowerCase().includes(productSearch.toLocaleLowerCase()),
+    ),
+  );
 
-  return <ScreenContainer><ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-    <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.eyebrow}>حزم مستقلة</Text><Text style={styles.title}>الصناديق</Text><Text style={styles.subtitle}>كل صندوق له باركود ومحتويات وحالة استهلاك منفصلة.</Text></View><View style={styles.icon}><Ionicons name="file-tray-full-outline" size={30} color={C.blue} /></View></View>
-    <Pressable style={styles.addButton} onPress={openNew}><Ionicons name="add-circle-outline" size={22} color={C.white} /><Text style={styles.addText}>إضافة صندوق</Text></Pressable>
-    <View style={styles.gridContainer}>{data.boxes.map((box) => <Pressable key={box.id} style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.86 }]} onPress={() => setSelected(box)}><View style={styles.boxArtwork}>{box.imageUri ? <Image source={{ uri: box.imageUri }} resizeMode="contain" style={styles.boxImage} /> : <BoxIllustration />}</View><View style={styles.boxCopy}><Text style={styles.boxName}>{box.name || "صندوق بدون اسم"}</Text><Text style={styles.boxMeta}>{box.items.filter((item) => item.status === "available").length} متاح · {box.items.filter((item) => item.status === "consumed").length} مستهلك</Text><Text style={styles.boxBarcode}>{box.barcode}</Text><View style={styles.boxBarcodeFrame}><Barcode value={box.barcode} format="CODE128" height={32} maxWidth={180} /></View></View><Ionicons name="chevron-back" size={20} color={C.blue} /></Pressable>)}</View>
-    {!data.boxes.length ? <View style={styles.empty}><Ionicons name="file-tray-outline" size={42} color={C.blue} /><Text style={styles.emptyTitle}>لا توجد صناديق</Text><Text style={styles.emptyText}>أنشئ صندوقًا وسيتم توليد باركود خاص به تلقائيًا.</Text></View> : null}
-  </ScrollView>
-  <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}><KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}><View style={styles.modal}><View style={styles.modalHeader}><Pressable onPress={() => setModalOpen(false)}><Ionicons name="close" size={24} color={C.navy} /></Pressable><Text style={styles.modalTitle}>إضافة صندوق</Text><View style={{ width: 24 }} /></View><ScrollView contentContainerStyle={styles.modalBody}><Field label="اسم الصندوق (اختياري)" value={name} onChangeText={setName} placeholder="مثال: صندوق العدد" /><Field label="الوصف (اختياري)" value={description} onChangeText={setDescription} placeholder="وصف محتويات الصندوق" multiline /><Pressable style={styles.imagePick} onPress={() => void pickImage().then(setImageUri)}>{imageUri ? <Image source={{ uri: imageUri }} resizeMode="contain" style={styles.imagePreview} /> : <><Ionicons name="image-outline" size={28} color={C.blue} /><Text style={styles.emptyText}>اختيار صورة للصندوق (اختياري)</Text></>}</Pressable><Pressable style={styles.save} onPress={saveBox}><Text style={styles.addText}>إنشاء الصندوق وتوليد الباركود</Text></Pressable></ScrollView></View></KeyboardAvoidingView></Modal>
-  <Modal visible={Boolean(selected)} transparent animationType="slide" onRequestClose={() => setSelected(null)}><View style={styles.backdrop}><View style={styles.modal}><View style={styles.modalHeader}><Pressable onPress={() => setSelected(null)}><Ionicons name="close" size={24} color={C.navy} /></Pressable><Text style={styles.modalTitle}>{selected?.name || "الصندوق"}</Text><View style={{ width: 24 }} /></View>{selected ? <ScrollView contentContainerStyle={styles.modalBody}><Text style={styles.boxBarcodeLarge}>{selected.barcode}</Text><Barcode value={selected.barcode} format="CODE128" height={52} maxWidth={280} /><Pressable style={styles.privateButton} onPress={() => setPrivateProductOpen((value) => !value)}><Ionicons name="add-circle-outline" size={19} color={C.blue} /><Text style={styles.privateText}>إضافة منتج خاص بالصندوق</Text></Pressable>{privateProductOpen ? <View style={styles.privateForm}><View style={styles.fieldHeader}><Text style={styles.label}>{editingItemId ? "تعديل المنتج" : "منتج جديد داخل الصندوق"}</Text><Pressable onPress={resetPrivateForm}><Ionicons name="close" size={20} color={C.muted} /></Pressable></View><View style={styles.fieldHeader}><Text style={styles.label}>الاسم</Text><VoiceInput onText={setPrivateProductName} /></View><TextInput value={privateProductName} onChangeText={setPrivateProductName} placeholder="اسم المنتج" placeholderTextColor="#8D9AAF" style={styles.input} textAlign="right" /><View style={styles.fieldHeader}><Text style={styles.label}>الوصف</Text><VoiceInput onText={setPrivateProductDescription} /></View><TextInput value={privateProductDescription} onChangeText={setPrivateProductDescription} placeholder="وصف المنتج" placeholderTextColor="#8D9AAF" style={[styles.input, styles.multiline]} multiline textAlign="right" /><TextInput value={privateProductQuantity} onChangeText={setPrivateProductQuantity} placeholder="عدد القطع" keyboardType="number-pad" placeholderTextColor="#8D9AAF" style={styles.input} textAlign="right" /><Pressable style={styles.imagePick} onPress={() => void pickImage().then(setPrivateProductImage)}>{privateProductImage ? <Image source={{ uri: privateProductImage }} resizeMode="contain" style={styles.imagePreview} /> : <><Ionicons name="image-outline" size={26} color={C.blue} /><Text style={styles.emptyText}>اختيار صورة المنتج</Text></>}</Pressable><Pressable style={styles.save} onPress={() => void addPrivateProduct()}><Text style={styles.addText}>{editingItemId ? "حفظ التعديل" : "حفظ داخل الصندوق فقط"}</Text></Pressable></View> : null}<View style={styles.search}><Ionicons name="search" size={19} color={C.blue} /><TextInput value={productSearch} onChangeText={setProductSearch} placeholder="ابحث لإضافة منتج للصندوق" placeholderTextColor="#8D9AAF" style={styles.searchInput} textAlign="right" /></View>{availableProducts.slice(0, 8).map((product) => <Pressable key={product.id} style={styles.productChoice} onPress={() => void addProduct(product)}><Text style={styles.choiceText}>{product.name}</Text><Ionicons name="add-circle-outline" size={22} color={C.blue} /></Pressable>)}<Text style={styles.sectionTitle}>محتويات الصندوق</Text>{selected.items.length ? selected.items.map((item) => <View key={item.id} style={[styles.item, item.status !== "available" && styles.itemConsumed]}>{item.imageUri ? <Image source={{ uri: item.imageUri }} resizeMode="contain" style={styles.itemImage} /> : <View style={[styles.itemImage, styles.itemImageEmpty]}><Ionicons name="cube-outline" size={22} color={C.blue} /></View>}<View style={styles.itemCopy}><Text style={[styles.itemName, item.status !== "available" && styles.strike]}>{item.productName} ({item.quantity})</Text>{item.description ? <Text style={styles.itemDesc} numberOfLines={2}>{item.description}</Text> : null}<Text style={styles.itemStatus}>{item.status === "available" ? "متاح" : "مستهلك"}</Text></View><View style={styles.itemActions}>{item.status === "available" ? <><Pressable style={styles.consumeButton} onPress={() => void consumeItem(item.id)}><Text style={styles.consumeText}>استهلاك</Text></Pressable><Pressable style={styles.editButton} onPress={() => openEditItem(item)}><Text style={styles.exportText}>تعديل</Text></Pressable><Pressable style={styles.exportButton} onPress={() => void exportToGeneral(item)}><Text style={styles.exportText}>للعام</Text></Pressable><Pressable style={styles.deleteButton} onPress={() => void removeItem(item.id)}><Text style={styles.deleteText}>حذف</Text></Pressable></> : <Ionicons name="checkmark-circle" size={22} color={C.green} />}</View></View>) : <Text style={styles.emptyText}>أضف منتجات إلى الصندوق من القائمة أعلاه.</Text>}</ScrollView> : null}</View></View></Modal>
-  </ScreenContainer>;
+  return (
+    <ScreenContainer>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>حزم مستقلة</Text>
+            <Text style={styles.title}>الصناديق</Text>
+            <Text style={styles.subtitle}>
+              كل صندوق له باركود ومحتويات وحالة استهلاك منفصلة.
+            </Text>
+          </View>
+          <View style={styles.icon}>
+            <Ionicons name="file-tray-full-outline" size={30} color={C.blue} />
+          </View>
+        </View>
+        <Pressable style={styles.addButton} onPress={openNew}>
+          <Ionicons name="add-circle-outline" size={22} color={C.white} />
+          <Text style={styles.addText}>إضافة صندوق</Text>
+        </Pressable>
+        <View style={styles.gridContainer}>
+          {data.boxes.map((box) => (
+            <Pressable
+              key={box.id}
+              style={({ pressed }) => [
+                styles.gridCard,
+                pressed && { opacity: 0.86 },
+              ]}
+              onPress={() => {
+                setFocusedItemId(null);
+                setSelected(box);
+              }}
+            >
+              <View style={styles.boxArtwork}>
+                {box.imageUri ? (
+                  <Image
+                    source={{ uri: box.imageUri }}
+                    resizeMode="contain"
+                    style={styles.boxImage}
+                  />
+                ) : (
+                  <BoxIllustration />
+                )}
+              </View>
+              <View style={styles.boxCopy}>
+                <Text style={styles.boxName}>
+                  {box.name || "صندوق بدون اسم"}
+                </Text>
+                <Text style={styles.boxMeta}>
+                  {
+                    box.items.filter((item) => item.status === "available")
+                      .length
+                  }{" "}
+                  متاح ·{" "}
+                  {
+                    box.items.filter((item) => item.status === "consumed")
+                      .length
+                  }{" "}
+                  مستهلك
+                </Text>
+                <Text style={styles.boxBarcode}>{box.barcode}</Text>
+                <View style={styles.boxBarcodeFrame}>
+                  <Barcode
+                    value={box.barcode}
+                    format="CODE128"
+                    height={32}
+                    maxWidth={180}
+                  />
+                </View>
+              </View>
+              <Ionicons name="chevron-back" size={20} color={C.blue} />
+            </Pressable>
+          ))}
+        </View>
+        {!data.boxes.length ? (
+          <View style={styles.empty}>
+            <Ionicons name="file-tray-outline" size={42} color={C.blue} />
+            <Text style={styles.emptyTitle}>لا توجد صناديق</Text>
+            <Text style={styles.emptyText}>
+              أنشئ صندوقًا وسيتم توليد باركود خاص به تلقائيًا.
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+      <Modal
+        visible={modalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Pressable onPress={() => setModalOpen(false)}>
+                <Ionicons name="close" size={24} color={C.navy} />
+              </Pressable>
+              <Text style={styles.modalTitle}>إضافة صندوق</Text>
+              <View style={{ width: 24 }} />
+            </View>
+            <ScrollView contentContainerStyle={styles.modalBody}>
+              <Field
+                label="اسم الصندوق (اختياري)"
+                value={name}
+                onChangeText={setName}
+                placeholder="مثال: صندوق العدد"
+              />
+              <Field
+                label="الوصف (اختياري)"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="وصف محتويات الصندوق"
+                multiline
+              />
+              <Pressable
+                style={styles.imagePick}
+                onPress={() => void pickImage().then(setImageUri)}
+              >
+                {imageUri ? (
+                  <Image
+                    source={{ uri: imageUri }}
+                    resizeMode="contain"
+                    style={styles.imagePreview}
+                  />
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={28} color={C.blue} />
+                    <Text style={styles.emptyText}>
+                      اختيار صورة للصندوق (اختياري)
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+              <Pressable style={styles.save} onPress={saveBox}>
+                <Text style={styles.addText}>
+                  إنشاء الصندوق وتوليد الباركود
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal
+        visible={Boolean(selected)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelected(null)}
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Pressable onPress={() => setSelected(null)}>
+                <Ionicons name="close" size={24} color={C.navy} />
+              </Pressable>
+              <Text style={styles.modalTitle}>
+                {selected?.name || "الصندوق"}
+              </Text>
+              <Pressable
+                onPress={deleteSelectedBox}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  backgroundColor: "#FFF1F1",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                accessibilityLabel="حذف الصندوق"
+              >
+                <Ionicons name="trash-outline" size={20} color={C.red} />
+              </Pressable>
+            </View>
+            {selected ? (
+              <ScrollView contentContainerStyle={styles.modalBody}>
+                <Text style={styles.boxBarcodeLarge}>{selected.barcode}</Text>
+                <Barcode
+                  value={selected.barcode}
+                  format="CODE128"
+                  height={52}
+                  maxWidth={280}
+                />
+                <Pressable
+                  style={styles.privateButton}
+                  onPress={() => setPrivateProductOpen((value) => !value)}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={19}
+                    color={C.blue}
+                  />
+                  <Text style={styles.privateText}>
+                    إضافة منتج خاص بالصندوق
+                  </Text>
+                </Pressable>
+                {privateProductOpen ? (
+                  <View style={styles.privateForm}>
+                    <View style={styles.fieldHeader}>
+                      <Text style={styles.label}>
+                        {editingItemId
+                          ? "تعديل المنتج"
+                          : "منتج جديد داخل الصندوق"}
+                      </Text>
+                      <Pressable onPress={resetPrivateForm}>
+                        <Ionicons name="close" size={20} color={C.muted} />
+                      </Pressable>
+                    </View>
+                    <View style={styles.fieldHeader}>
+                      <Text style={styles.label}>الاسم</Text>
+                      <VoiceInput onText={setPrivateProductName} />
+                    </View>
+                    <TextInput
+                      value={privateProductName}
+                      onChangeText={setPrivateProductName}
+                      placeholder="اسم المنتج"
+                      placeholderTextColor="#8D9AAF"
+                      style={styles.input}
+                      textAlign="right"
+                    />
+                    <View style={styles.fieldHeader}>
+                      <Text style={styles.label}>الوصف</Text>
+                      <VoiceInput onText={setPrivateProductDescription} />
+                    </View>
+                    <TextInput
+                      value={privateProductDescription}
+                      onChangeText={setPrivateProductDescription}
+                      placeholder="وصف المنتج"
+                      placeholderTextColor="#8D9AAF"
+                      style={[styles.input, styles.multiline]}
+                      multiline
+                      textAlign="right"
+                    />
+                    <TextInput
+                      value={privateProductQuantity}
+                      onChangeText={setPrivateProductQuantity}
+                      placeholder="عدد القطع"
+                      keyboardType="number-pad"
+                      placeholderTextColor="#8D9AAF"
+                      style={styles.input}
+                      textAlign="right"
+                    />
+                    <Pressable
+                      style={styles.imagePick}
+                      onPress={() =>
+                        void pickImage().then(setPrivateProductImage)
+                      }
+                    >
+                      {privateProductImage ? (
+                        <Image
+                          source={{ uri: privateProductImage }}
+                          resizeMode="contain"
+                          style={styles.imagePreview}
+                        />
+                      ) : (
+                        <>
+                          <Ionicons
+                            name="image-outline"
+                            size={26}
+                            color={C.blue}
+                          />
+                          <Text style={styles.emptyText}>
+                            اختيار صورة المنتج
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.save}
+                      onPress={() => void addPrivateProduct()}
+                    >
+                      <Text style={styles.addText}>
+                        {editingItemId ? "حفظ التعديل" : "حفظ داخل الصندوق فقط"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                <View style={styles.search}>
+                  <Ionicons name="search" size={19} color={C.blue} />
+                  <TextInput
+                    value={productSearch}
+                    onChangeText={setProductSearch}
+                    placeholder="ابحث لإضافة منتج للصندوق"
+                    placeholderTextColor="#8D9AAF"
+                    style={styles.searchInput}
+                    textAlign="right"
+                  />
+                </View>
+                {availableProducts.slice(0, 8).map((product) => (
+                  <Pressable
+                    key={product.id}
+                    style={styles.productChoice}
+                    onPress={() => void addProduct(product)}
+                  >
+                    <Text style={styles.choiceText}>{product.name}</Text>
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={22}
+                      color={C.blue}
+                    />
+                  </Pressable>
+                ))}
+                <Text style={styles.sectionTitle}>محتويات الصندوق</Text>
+                {selected.items.length ? (
+                  selected.items.map((item) => (
+                    <BoxItemRow
+                      key={item.id}
+                      item={item}
+                      focused={focusedItemId === item.id}
+                      onConsume={() => void consumeItem(item.id)}
+                      onEdit={() => openEditItem(item)}
+                      onExport={() => void exportToGeneral(item)}
+                      onRemove={() => confirmRemoveItem(item)}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>
+                    أضف منتجات إلى الصندوق من القائمة أعلاه.
+                  </Text>
+                )}
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+    </ScreenContainer>
+  );
 }
 
 const styles = StyleSheet.create({
-  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" },
-  gridCard: { width: "47%", backgroundColor: C.white, borderRadius: 20, padding: 10, borderWidth: 1, borderColor: C.border, shadowColor: C.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3, marginBottom: 4 },
-  gridImage: { width: "100%", height: 110, borderRadius: 14, backgroundColor: "#F7F3EA", marginBottom: 8, alignItems: "center", justifyContent: "center" },
-  gridName: { color: C.navy, fontSize: 14, fontWeight: "800", textAlign: "right" },
-  gridMeta: { color: C.blue, fontSize: 10, fontWeight: "700", textAlign: "right", marginTop: 4 },
-  container: { padding: 20, paddingTop: 18, paddingBottom: 48, gap: 14, backgroundColor: C.bg }, header: { flexDirection: "row", alignItems: "center", gap: 14 }, headerCopy: { flex: 1, alignItems: "flex-end" }, eyebrow: { color: C.orange, fontSize: 12, fontWeight: "800" }, title: { color: C.navy, fontSize: 28, fontWeight: "900" }, subtitle: { color: C.muted, fontSize: 13, textAlign: "right", lineHeight: 20, marginTop: 5 }, icon: { width: 62, height: 62, borderRadius: 20, backgroundColor: C.blueLight, alignItems: "center", justifyContent: "center" }, addButton: { minHeight: 50, borderRadius: 15, backgroundColor: C.blue, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }, addText: { color: C.white, fontSize: 14, fontWeight: "900" }, boxCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.white, borderWidth: 1, borderColor: C.border, borderRadius: 19, padding: 12, shadowColor: C.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }, boxArtwork: { width: 88, height: 88, borderRadius: 17, backgroundColor: "#F7F3EA", borderWidth: 1, borderColor: "#EEE4D2", alignItems: "center", justifyContent: "center", overflow: "hidden" }, boxImage: { width: "100%", height: "100%", padding: 5, backgroundColor: "#F7F3EA" }, boxCopy: { flex: 1, alignItems: "flex-end", gap: 2 }, boxBarcodeFrame: { alignSelf: "stretch", alignItems: "center", marginTop: 4, paddingVertical: 4, paddingHorizontal: 6, backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: C.border }, boxName: { color: C.navy, fontSize: 16, fontWeight: "900" }, boxMeta: { color: C.blue, fontSize: 11, marginTop: 3 }, boxBarcode: { color: C.muted, fontSize: 9, letterSpacing: 1, marginTop: 3 }, empty: { alignItems: "center", backgroundColor: C.white, padding: 28, borderRadius: 18, gap: 8 }, emptyTitle: { color: C.navy, fontSize: 17, fontWeight: "900" }, emptyText: { color: C.muted, textAlign: "center", lineHeight: 20 }, backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,37,63,.35)" }, modal: { maxHeight: "92%", backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingTop: 13 }, modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingBottom: 12 }, modalTitle: { color: C.navy, fontSize: 18, fontWeight: "900" }, modalBody: { padding: 18, gap: 14 }, field: { gap: 7 }, imagePick: { minHeight: 110, borderRadius: 15, borderWidth: 1, borderStyle: "dashed", borderColor: C.border, backgroundColor: C.white, alignItems: "center", justifyContent: "center", gap: 5 }, imagePreview: { width: "100%", height: 110, borderRadius: 15 }, fieldHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, label: { color: C.navy, fontSize: 13, fontWeight: "900", textAlign: "right" }, input: { backgroundColor: C.white, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, color: C.navy, fontSize: 14 }, multiline: { minHeight: 90, paddingTop: 13, textAlignVertical: "top" }, save: { minHeight: 50, borderRadius: 14, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" }, search: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.white, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12 }, searchInput: { flex: 1, color: C.navy }, productChoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: C.white, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border }, choiceText: { color: C.navy, fontWeight: "800" }, sectionTitle: { color: C.navy, fontSize: 17, fontWeight: "900", textAlign: "right", marginTop: 8 }, item: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.white, borderRadius: 13, padding: 12, borderWidth: 1, borderColor: C.border }, itemConsumed: { opacity: 0.55, backgroundColor: "#EEF1F4" }, itemCopy: { flex: 1, alignItems: "flex-end" }, itemName: { color: C.navy, fontSize: 14, fontWeight: "900" }, strike: { textDecorationLine: "line-through" }, itemStatus: { color: C.muted, fontSize: 11, marginTop: 3 }, itemImage: { width: 46, height: 46, borderRadius: 11, backgroundColor: C.blueLight }, itemImageEmpty: { alignItems: "center", justifyContent: "center" }, itemDesc: { color: C.muted, fontSize: 11, marginTop: 2, textAlign: "right" }, editButton: { backgroundColor: C.blueLight, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7 }, deleteButton: { backgroundColor: "#FFF1F1", borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7 }, deleteText: { color: C.red, fontSize: 11, fontWeight: "900" }, privateButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.blue, backgroundColor: C.blueLight, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }, privateText: { color: C.blue, fontWeight: "900" }, privateForm: { gap: 9 }, consumeButton: { backgroundColor: "#FFF1F1", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 }, consumeText: { color: C.red, fontSize: 11, fontWeight: "900" }, exportButton: { backgroundColor: C.blueLight, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 }, exportText: { color: C.blue, fontSize: 11, fontWeight: "900" }, itemActions: { flexDirection: "row", gap: 6 }, boxBarcodeLarge: { color: C.navy, textAlign: "center", letterSpacing: 2, fontWeight: "900" } });
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  gridCard: {
+    width: "47%",
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+    marginBottom: 4,
+  },
+  gridImage: {
+    width: "100%",
+    height: 110,
+    borderRadius: 14,
+    backgroundColor: "#F7F3EA",
+    marginBottom: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gridName: {
+    color: C.navy,
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  gridMeta: {
+    color: C.blue,
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 4,
+  },
+  container: {
+    padding: 20,
+    paddingTop: 18,
+    paddingBottom: 48,
+    gap: 14,
+    backgroundColor: C.bg,
+  },
+  header: { flexDirection: "row", alignItems: "center", gap: 14 },
+  headerCopy: { flex: 1, alignItems: "flex-end" },
+  eyebrow: { color: C.orange, fontSize: 12, fontWeight: "800" },
+  title: { color: C.navy, fontSize: 28, fontWeight: "900" },
+  subtitle: {
+    color: C.muted,
+    fontSize: 13,
+    textAlign: "right",
+    lineHeight: 20,
+    marginTop: 5,
+  },
+  icon: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: C.blueLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addButton: {
+    minHeight: 50,
+    borderRadius: 15,
+    backgroundColor: C.blue,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  addText: { color: C.white, fontSize: 14, fontWeight: "900" },
+  boxCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 19,
+    padding: 12,
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  boxArtwork: {
+    width: 88,
+    height: 88,
+    borderRadius: 17,
+    backgroundColor: "#F7F3EA",
+    borderWidth: 1,
+    borderColor: "#EEE4D2",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  boxImage: {
+    width: "100%",
+    height: "100%",
+    padding: 5,
+    backgroundColor: "#F7F3EA",
+  },
+  boxCopy: { flex: 1, alignItems: "flex-end", gap: 2 },
+  boxBarcodeFrame: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  boxName: { color: C.navy, fontSize: 16, fontWeight: "900" },
+  boxMeta: { color: C.blue, fontSize: 11, marginTop: 3 },
+  boxBarcode: { color: C.muted, fontSize: 9, letterSpacing: 1, marginTop: 3 },
+  empty: {
+    alignItems: "center",
+    backgroundColor: C.white,
+    padding: 28,
+    borderRadius: 18,
+    gap: 8,
+  },
+  emptyTitle: { color: C.navy, fontSize: 17, fontWeight: "900" },
+  emptyText: { color: C.muted, textAlign: "center", lineHeight: 20 },
+  backdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(16,37,63,.35)",
+  },
+  modal: {
+    maxHeight: "92%",
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 13,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  modalTitle: { color: C.navy, fontSize: 18, fontWeight: "900" },
+  modalBody: { padding: 18, gap: 14 },
+  field: { gap: 7 },
+  imagePick: {
+    minHeight: 110,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: C.border,
+    backgroundColor: C.white,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  imagePreview: { width: "100%", height: 110, borderRadius: 15 },
+  fieldHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  label: { color: C.navy, fontSize: 13, fontWeight: "900", textAlign: "right" },
+  input: {
+    backgroundColor: C.white,
+    minHeight: 48,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    color: C.navy,
+    fontSize: 14,
+  },
+  multiline: { minHeight: 90, paddingTop: 13, textAlignVertical: "top" },
+  save: {
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: C.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  search: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+  },
+  searchInput: { flex: 1, color: C.navy },
+  productChoice: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: C.white,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  choiceText: { color: C.navy, fontWeight: "800" },
+  sectionTitle: {
+    color: C.navy,
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "right",
+    marginTop: 8,
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: C.white,
+    borderRadius: 13,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  itemConsumed: { opacity: 0.55, backgroundColor: "#EEF1F4" },
+  itemCopy: { flex: 1, alignItems: "flex-end" },
+  itemName: { color: C.navy, fontSize: 14, fontWeight: "900" },
+  strike: { textDecorationLine: "line-through" },
+  itemStatus: { color: C.muted, fontSize: 11, marginTop: 3 },
+  itemImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 11,
+    backgroundColor: C.blueLight,
+  },
+  itemImageEmpty: { alignItems: "center", justifyContent: "center" },
+  itemDesc: { color: C.muted, fontSize: 11, marginTop: 2, textAlign: "right" },
+  editButton: {
+    backgroundColor: C.blueLight,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  deleteButton: {
+    backgroundColor: "#FFF1F1",
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  deleteText: { color: C.red, fontSize: 11, fontWeight: "900" },
+  privateButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.blue,
+    backgroundColor: C.blueLight,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+  },
+  privateText: { color: C.blue, fontWeight: "900" },
+  privateForm: { gap: 9 },
+  consumeButton: {
+    backgroundColor: "#FFF1F1",
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  consumeText: { color: C.red, fontSize: 11, fontWeight: "900" },
+  exportButton: {
+    backgroundColor: C.blueLight,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  exportText: { color: C.blue, fontSize: 11, fontWeight: "900" },
+  itemActions: { flexDirection: "row", gap: 6 },
+  boxBarcodeLarge: {
+    color: C.navy,
+    textAlign: "center",
+    letterSpacing: 2,
+    fontWeight: "900",
+  },
+});
