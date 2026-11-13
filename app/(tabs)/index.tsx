@@ -35,7 +35,87 @@ const COLORS = {
   border: "#DCE4EF",
 };
 
-const confirmAction = (title: string, message: string, action: () => void) => {
+const styles = StyleSheet.create({
+  container: { padding: 20, paddingTop: 18, paddingBottom: 44, gap: 18, backgroundColor: COLORS.bg },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: COLORS.bg },
+  muted: { color: COLORS.muted, fontSize: 14, textAlign: "center" },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  brandCopy: { flex: 1, alignItems: "flex-end" },
+  eyebrow: { color: COLORS.blue, fontSize: 12, fontWeight: "700", marginBottom: 5 },
+  title: { color: COLORS.navy, fontSize: 25, fontWeight: "800", textAlign: "right" },
+  subtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "right", marginTop: 5 },
+  brandIcon: { width: 70, height: 70, borderRadius: 20, backgroundColor: COLORS.blueLight },
+  autoBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#ECF8F3", borderColor: "#CDEBDD", borderWidth: 1, borderRadius: 18, padding: 13 },
+  autoIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: COLORS.white, alignItems: "center", justifyContent: "center" },
+  autoTitle: { color: COLORS.navy, fontWeight: "800", fontSize: 13, textAlign: "right" },
+  autoText: { color: COLORS.green, fontSize: 11, textAlign: "right", marginTop: 2 },
+  liveDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.green },
+  searchBox: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 14 },
+  searchInput: { flex: 1, color: COLORS.navy, fontSize: 14, paddingVertical: 10 },
+  statsRow: { flexDirection: "row", gap: 9 },
+  statCard: { flex: 1, backgroundColor: COLORS.white, borderRadius: 17, padding: 13, borderWidth: 1, borderColor: COLORS.border, alignItems: "flex-end", gap: 4 },
+  statNumber: { color: COLORS.navy, fontSize: 25, fontWeight: "800" },
+  statLabel: { color: COLORS.muted, fontSize: 12 },
+  sectionBlock: { gap: 13 },
+  blockHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  blockTitle: { color: COLORS.navy, fontSize: 19, fontWeight: "800", textAlign: "right" },
+  countText: { color: COLORS.muted, fontSize: 12 },
+  addSmallButton: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.blue, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12 },
+  addSmallText: { color: COLORS.white, fontWeight: "700", fontSize: 12 },
+  sectionCard: { backgroundColor: COLORS.white, borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: COLORS.border },
+  sectionAccent: { height: 4, backgroundColor: COLORS.blue },
+  sectionCardContent: { flexDirection: "row", alignItems: "center", padding: 15, gap: 12 },
+  sectionArrow: { width: 30, height: 30, borderRadius: 10, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
+  sectionCardText: { flex: 1, alignItems: "flex-end" },
+  editSectionButton: { width: 34, height: 34, borderRadius: 11, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
+  sectionName: { color: COLORS.navy, fontSize: 17, fontWeight: "800" },
+  sectionMeta: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
+  sectionIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" },
+  gridCard: { width: "47%", backgroundColor: COLORS.white, borderRadius: 20, padding: 10, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3, marginBottom: 4 },
+  gridImage: { width: "100%", height: 110, borderRadius: 14, backgroundColor: COLORS.blueLight, marginBottom: 8 },
+  gridName: { color: COLORS.navy, fontSize: 14, fontWeight: "800", textAlign: "right" },
+  gridMeta: { color: COLORS.blue, fontSize: 10, fontWeight: "700", textAlign: "right", marginTop: 4 },
+  detailHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  backButton: { flexDirection: "row", alignItems: "center", gap: 3, padding: 5 },
+  backText: { color: COLORS.blue, fontSize: 12, fontWeight: "700" },
+  actionRow: { flexDirection: "row", gap: 9, alignItems: "center" },
+  primaryButton: { minHeight: 46, flex: 1, backgroundColor: COLORS.blue, borderRadius: 13, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7, paddingHorizontal: 16 },
+  primaryButtonText: { color: COLORS.white, fontSize: 14, fontWeight: "800" },
+  ghostButton: { minHeight: 44, flex: 1, borderRadius: 13, borderWidth: 1, borderColor: "#F0C6C6", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 12 },
+  dangerText: { color: COLORS.red, fontSize: 13, fontWeight: "800" },
+  disabled: { opacity: 0.45 },
+  emptyState: { alignItems: "center", paddingVertical: 30, paddingHorizontal: 24, backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, gap: 8 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle: { color: COLORS.navy, fontSize: 17, fontWeight: "800", textAlign: "center" },
+  emptyText: { color: COLORS.muted, fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 8 },
+  modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,37,63,0.35)" },
+  modalCard: { maxHeight: "92%", backgroundColor: COLORS.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingTop: 13 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingBottom: 10 },
+  modalTitle: { color: COLORS.navy, fontSize: 18, fontWeight: "800", textAlign: "right" },
+  iconButton: { width: 40, height: 40, borderRadius: 13, backgroundColor: COLORS.white, alignItems: "center", justifyContent: "center" },
+  modalContent: { padding: 18, gap: 15 },
+  modalHint: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "right" },
+  fieldWrap: { gap: 7 },
+  fieldHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  fieldLabel: { color: COLORS.navy, fontSize: 13, fontWeight: "800", textAlign: "right" },
+  input: { backgroundColor: COLORS.white, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 14, color: COLORS.navy, fontSize: 14 },
+  multiline: { minHeight: 92, paddingTop: 13, textAlignVertical: "top" },
+  imagePicker: { minHeight: 150, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", backgroundColor: COLORS.white, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  imagePlaceholder: { alignItems: "center", gap: 8 },
+  imagePickerText: { color: COLORS.blue, fontSize: 13, fontWeight: "700" },
+  previewImage: { width: "100%", height: 190, backgroundColor: COLORS.white },
+  detailImage: { width: "100%", height: 220, borderRadius: 18, backgroundColor: COLORS.blueLight },
+  detailImagePlaceholder: { height: 150, borderRadius: 18, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
+  detailName: { color: COLORS.navy, fontSize: 23, fontWeight: "800", textAlign: "right" },
+  detailSection: { color: COLORS.blue, fontSize: 13, fontWeight: "800", textAlign: "right" },
+  barcodeText: { color: COLORS.muted, fontSize: 11, textAlign: "right" },
+  stockBadge: { alignSelf: "flex-end", color: COLORS.green, backgroundColor: "#ECF8F3", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, fontWeight: "900" },
+  detailDescription: { color: COLORS.muted, fontSize: 14, lineHeight: 22, textAlign: "right" },
+  detailDate: { color: COLORS.muted, fontSize: 12, textAlign: "right" },
+});
+
+function confirmAction(title: string, message: string, action: () => void) {
   if (Platform.OS === "web") {
     if (typeof window !== "undefined" && window.confirm(message)) action();
     return;
@@ -44,7 +124,7 @@ const confirmAction = (title: string, message: string, action: () => void) => {
     { text: "إلغاء", style: "cancel" },
     { text: "تأكيد", style: "destructive", onPress: action },
   ]);
-};
+}
 
 function Field({ label, value, onChangeText, placeholder, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean }) {
   return (
@@ -258,10 +338,7 @@ export default function HomeScreen() {
         {searchTerm ? (
           <View style={styles.sectionBlock}>
             <View style={styles.blockHeader}><Text style={styles.blockTitle}>نتائج البحث</Text><Text style={styles.countText}>{searchResults.length} نتيجة</Text></View>
-            {searchResults.length ? searchResults.map((product) => {
-              const section = data.sections.find((item) => item.id === product.sectionId);
-              return <ProductCard key={product.id} product={product} sectionName={section?.name ?? "بدون قسم"} onPress={() => setDetailProduct(product)} onEdit={() => openEditProduct(product)} />;
-            }) : <EmptyState icon="search-outline" title="لا توجد نتيجة" text="جرّب اسمًا آخر أو جزءًا من الوصف." />}
+            {searchResults.length ? <View style={styles.gridContainer}>{searchResults.map((product) => <GridCard key={product.id} product={product} onPress={() => setDetailProduct(product)} />)}</View> : <EmptyState icon="search-outline" title="لا توجد نتيجة" text="جرّب اسمًا آخر أو جزءًا من الوصف." />}
           </View>
         ) : currentSection ? (
           <View style={styles.sectionBlock}>
@@ -332,7 +409,6 @@ function StatCard({ number, label, icon }: { number: number; label: string; icon
   return <View style={styles.statCard}><Ionicons name={icon} size={20} color={COLORS.blue} /><Text style={styles.statNumber}>{number}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
-
 function GridCard({ product, onPress }: { product: Product; onPress: () => void }) {
   return <Pressable onPress={onPress} style={styles.gridCard}>
     <View style={styles.gridImage}>{product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="cover" style={{ width: "100%", height: "100%" }} /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}</View>
@@ -341,4 +417,6 @@ function GridCard({ product, onPress }: { product: Product; onPress: () => void 
   </Pressable>;
 }
 
-function ProductCard(props) { return null; }
+function EmptyState({ icon, title, text, actionLabel, onAction }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; actionLabel?: string; onAction?: () => void }) {
+  return <View style={styles.emptyState}><View style={styles.emptyIcon}><Ionicons name={icon} size={30} color={COLORS.blue} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{text}</Text>{actionLabel && onAction ? <Pressable style={styles.primaryButton} onPress={onAction}><Text style={styles.primaryButtonText}>{actionLabel}</Text></Pressable> : null}</View>;
+}
