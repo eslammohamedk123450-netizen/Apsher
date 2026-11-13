@@ -64,15 +64,22 @@ export default function BarcodesScreen() {
   };
 
   const onScan = ({ data: value }: { data: string }) => {
-    const scanned = value.trim();
-    const foundProduct = data.products.find((item) => item.barcode === scanned);
-    const foundBox = data.boxes.find((item) => item.barcode === scanned);
-    const foundKind = foundBox ? "box" : foundProduct ? "product" : null;
-    if (foundKind) setKind(foundKind);
-    setSelected([]);
-    setSearch(scanned);
+    const scanned = value.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase();
+    const foundProduct = data.products.find((item) => item.barcode.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase() === scanned);
+    const foundBox = data.boxes.find((item) => item.barcode.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase() === scanned);
+    const found = foundBox ?? foundProduct;
     setScannerOpen(false);
-    if (!foundKind) Alert.alert("باركود غير معروف", "هذا الباركود غير مسجل في التطبيق.");
+    if (found) {
+      setKind(foundBox ? "box" : "product");
+      setSelected([]);
+      setSearch(found.barcode);
+      return;
+    }
+    if (/^ABS-[BP]-[A-Z0-9-]+$/.test(scanned)) {
+      Alert.alert("الباركود صحيح لكنه غير مسجل هنا", "هذا الرمز بصيغة أبشر، لكن الصناديق والمنتجات محفوظة محليًا على كل هاتف. أضف الصندوق هنا أو انقل نسخة بياناته إلى هذا الجهاز. لم يتم تغيير أو إخفاء قائمتك.");
+    } else {
+      Alert.alert("لم يتم العثور على الباركود", "تحقق من وضوح الصورة أو أعد المسح. لم يتم تغيير أو إخفاء قائمتك.");
+    }
   };
 
   return <ScreenContainer><ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">

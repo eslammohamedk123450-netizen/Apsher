@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Svg, { Polygon } from "react-native-svg";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VoiceInput } from "@/components/voice-input";
@@ -298,7 +299,7 @@ export default function HomeScreen() {
         <Field label="عدد القطع المتبقية" value={productQuantity} onChangeText={setProductQuantity} placeholder="مثال: 10" />
         <Field label="الوصف" value={productDescription} onChangeText={setProductDescription} placeholder="اكتب وصفًا يساعدك في البحث لاحقًا" multiline />
         <Pressable style={styles.imagePicker} onPress={chooseImage}>
-          {productImage ? <Image source={{ uri: productImage }} style={styles.previewImage} /> : <View style={styles.imagePlaceholder}><Ionicons name="image-outline" size={28} color={COLORS.blue} /><Text style={styles.imagePickerText}>اختيار صورة من الجهاز</Text></View>}
+          {productImage ? <Image source={{ uri: productImage }} resizeMode="contain" style={styles.previewImage} /> : <View style={styles.imagePlaceholder}><Ionicons name="image-outline" size={28} color={COLORS.blue} /><Text style={styles.imagePickerText}>اختيار صورة من الجهاز</Text></View>}
         </Pressable>
         <Pressable style={[styles.primaryButton, !productName.trim() && styles.disabled]} disabled={!productName.trim()} onPress={saveProduct}><Text style={styles.primaryButtonText}>{editingProduct ? "حفظ التعديل" : "إضافة المنتج"}</Text></Pressable>
       </ModalShell>
@@ -324,10 +325,19 @@ function StatCard({ number, label, icon }: { number: number; label: string; icon
 
 function ProductCard({ product, sectionName, onPress, onEdit }: { product: Product; sectionName: string; onPress: () => void; onEdit: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.82 }]}>
-    {product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="contain" style={styles.productThumb} /> : <View style={styles.productThumbPlaceholder}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}
+    <View style={styles.productThumbFrame}>{product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="contain" style={styles.productThumb} /> : <ProductIllustration />}</View>
     <View style={styles.productCopy}><Text style={styles.productName}>{product.name}</Text><Text style={styles.productSection}>{sectionName} · {product.quantity} قطعة متبقية</Text><Text style={styles.productDescription} numberOfLines={2}>{product.description || "بدون وصف"}</Text></View>
     <Pressable onPress={(event) => { event.stopPropagation(); onEdit(); }} style={styles.editButton}><Ionicons name="create-outline" size={18} color={COLORS.blue} /></Pressable>
   </Pressable>;
+}
+
+function ProductIllustration() {
+  return <Svg width="68%" height="68%" viewBox="0 0 100 100">
+    <Polygon points="50,8 88,28 50,48 12,28" fill="#DCEBFA" />
+    <Polygon points="12,28 50,48 50,90 12,70" fill="#80B2E3" />
+    <Polygon points="50,48 88,28 88,70 50,90" fill="#4D8BCB" />
+    <Polygon points="43,12 57,19 50,23 36,16" fill="#FFFFFF" />
+  </Svg>;
 }
 
 function EmptyState({ icon, title, text, actionLabel, onAction }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; actionLabel?: string; onAction?: () => void }) {
@@ -370,9 +380,9 @@ const styles = StyleSheet.create({
   sectionName: { color: COLORS.navy, fontSize: 17, fontWeight: "800" },
   sectionMeta: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
   sectionIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
-  productCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 17, padding: 10, gap: 10 },
-  productThumb: { width: 64, height: 64, borderRadius: 13, backgroundColor: COLORS.blueLight },
-  productThumbPlaceholder: { width: 64, height: 64, borderRadius: 13, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
+  productCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 19, padding: 11, gap: 11, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  productThumbFrame: { width: 86, height: 86, borderRadius: 17, backgroundColor: "#F0F5FB", borderWidth: 1, borderColor: "#E0EAF5", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  productThumb: { width: "100%", height: "100%", padding: 5 },
   productCopy: { flex: 1, alignItems: "flex-end" },
   productName: { color: COLORS.navy, fontSize: 15, fontWeight: "800" },
   productSection: { color: COLORS.blue, fontSize: 11, fontWeight: "700", marginTop: 3 },
@@ -406,7 +416,7 @@ const styles = StyleSheet.create({
   imagePicker: { minHeight: 150, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", backgroundColor: COLORS.white, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   imagePlaceholder: { alignItems: "center", gap: 8 },
   imagePickerText: { color: COLORS.blue, fontSize: 13, fontWeight: "700" },
-  previewImage: { width: "100%", height: 190 },
+  previewImage: { width: "100%", height: 190, backgroundColor: COLORS.white },
   detailImage: { width: "100%", height: 220, borderRadius: 18, backgroundColor: COLORS.blueLight },
   detailImagePlaceholder: { height: 150, borderRadius: 18, backgroundColor: COLORS.blueLight, alignItems: "center", justifyContent: "center" },
   detailName: { color: COLORS.navy, fontSize: 23, fontWeight: "800", textAlign: "right" },
