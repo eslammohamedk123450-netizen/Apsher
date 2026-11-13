@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Svg, { Line, Polygon } from "react-native-svg";
 
@@ -27,7 +28,15 @@ function BoxIllustration() {
 
 export default function BoxesScreen() {
   const { data, commit, pickImage } = useApp();
+  const { boxId } = useLocalSearchParams<{ boxId?: string }>();
+  const router = useRouter();
   const [selected, setSelected] = useState<Box | null>(null);
+  useEffect(() => {
+    if (!boxId) return;
+    const box = data.boxes.find((item) => item.id === boxId);
+    if (box) setSelected(box);
+    router.setParams({ boxId: undefined });
+  }, [boxId, data.boxes, router]);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

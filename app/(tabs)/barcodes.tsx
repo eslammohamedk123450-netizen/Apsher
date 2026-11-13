@@ -3,6 +3,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -30,6 +31,7 @@ function pdfBars(value: string) {
 
 export default function BarcodesScreen() {
   const { data } = useApp();
+  const router = useRouter();
   const [kind, setKind] = useState<"all" | "product" | "box">("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -65,14 +67,21 @@ export default function BarcodesScreen() {
 
   const onScan = ({ data: value }: { data: string }) => {
     const scanned = value.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase();
-    const foundProduct = data.products.find((item) => item.barcode.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase() === scanned);
-    const foundBox = data.boxes.find((item) => item.barcode.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase() === scanned);
-    const found = foundBox ?? foundProduct;
+    const normalizeCode = (code: string) => code.replace(/[\u0000-\u001F\u007F\s]/g, "").toLocaleUpperCase();
+    const foundBox = data.boxes.find((item) => normalizeCode(item.barcode) === scanned);
+    const foundProduct = data.products.find((item) => normalizeCode(item.barcode) === scanned);
+    const containingBox = data.boxes.find((box) => box.items.some((item) => item.barcodeAliases?.some((code) => normalizeCode(code) === scanned)));
     setScannerOpen(false);
-    if (found) {
-      setKind(foundBox ? "box" : "product");
-      setSelected([]);
-      setSearch(found.barcode);
+    if (foundBox) {
+      router.navigate({ pathname: "/(tabs)/boxes", params: { boxId: foundBox.id } });
+      return;
+    }
+    if (containingBox) {
+      router.navigate({ pathname: "/(tabs)/boxes", params: { boxId: containingBox.id } });
+      return;
+    }
+    if (foundProduct) {
+      router.navigate({ pathname: "/(tabs)", params: { productId: foundProduct.id } });
       return;
     }
     if (/^ABS-[BP]-[A-Z0-9-]+$/.test(scanned)) {

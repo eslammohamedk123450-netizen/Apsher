@@ -34,6 +34,8 @@ export type BoxItem = {
   description?: string;
   quantity: number;
   imageUri?: string | null;
+  /** Historical product codes retained for lookup while item is inside a box. */
+  barcodeAliases?: string[];
   status: "available" | "consumed" | "removed";
   addedAt: string;
   consumedAt?: string;
@@ -100,7 +102,7 @@ const META_KEY = "emsir.app.backup.meta";
     return {
       ...previous,
       products: previous.products.filter((p) => p.id !== productId),
-      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
+      boxes: previous.boxes.map((b) => b.id === boxId ? { ...b, items: [...b.items, { id: makeId("box-item"), productId: product.id, productName: product.name, description: product.description, quantity: product.quantity, imageUri: product.imageUri ?? null, barcodeAliases: product.barcode ? [product.barcode] : [], status: "available" as const, addedAt: now() }], updatedAt: now() } : b),
     };
   };
 
@@ -113,7 +115,7 @@ const META_KEY = "emsir.app.backup.meta";
       if (b.id !== boxId) return b;
       const item = b.items.find((i) => i.id === itemId);
       if (item) {
-        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: item.description || "منقول من صندوق", quantity: item.quantity, barcode: makeBarcode("product"), imageUri: item.imageUri ?? null, createdAt: now(), updatedAt: now() };
+        movedProduct = { id: item.productId, sectionId: fallbackSectionId, name: item.productName, description: item.description || "منقول من صندوق", quantity: item.quantity, barcode: item.barcodeAliases?.[0] || makeBarcode("product"), imageUri: item.imageUri ?? null, createdAt: now(), updatedAt: now() };
         return { ...b, items: b.items.filter((i) => i.id !== itemId), updatedAt: now() };
       }
       return b;
@@ -276,6 +278,24 @@ export async function exportDataZip(data: AppData) {
     products.push(copy);
   }
 
+  const boxes: Box[] = [];
+  for (const box of data.boxes) {
+    const copy = { ...box };
+    if (box.imageUri) {
+      try { copy.imageUri = await addImage(box.imageUri, `box-${box.id}.jpg`); }
+      catch { copy.imageUri = null; }
+    }
+    copy.items = [];
+    for (const item of box.items) {
+      const itemCopy = { ...item };
+      if (item.imageUri) {
+        try { itemCopy.imageUri = await addImage(item.imageUri, `box-item-${item.id}.jpg`); }
+        catch { itemCopy.imageUri = null; }
+      }
+      copy.items.push(itemCopy);
+    }
+    boxes.push(copy);
+  }
   const consumers: ConsumerRecord[] = [];
   for (const record of data.consumerRecords) {
     const snapshot = { ...record.productSnapshot };
@@ -289,7 +309,7 @@ export async function exportDataZip(data: AppData) {
     consumers.push({ ...record, productSnapshot: snapshot });
   }
 
-  zip.file("data.json", JSON.stringify({ ...data, products, consumerRecords: consumers }, null, 2));
+  zip.file("data.json", JSON.stringify({ ...data, products, boxes, consumerRecords: consumers }, null, 2));
   zip.file(
     "README.txt",
     "نسخة احتياطية من تطبيق أبشر\n\nاستورد ملف ZIP من شاشة الإعدادات لاستعادة الأقسام والمنتجات وسجل المستهلك والصور.\n",
@@ -329,6 +349,10 @@ export async function importDataZip() {
     return restored;
   };
   for (const product of imported.products) product.imageUri = await restoreReference(product.imageUri);
+  for (const box of imported.boxes) {
+    box.imageUri = await restoreReference(box.imageUri);
+    for (const item of box.items) item.imageUri = await restoreReference(item.imageUri);
+  }
   for (const record of imported.consumerRecords) {
     record.productSnapshot.imageUri = await restoreReference(record.productSnapshot.imageUri);
   }

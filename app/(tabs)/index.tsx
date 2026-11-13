@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -85,6 +86,8 @@ function ModalShell({ visible, title, onClose, children }: { visible: boolean; t
 
 export default function HomeScreen() {
   const { data, ready, autoStatus, commit, pickImage } = useApp();
+  const { productId } = useLocalSearchParams<{ productId?: string }>();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [sectionModal, setSectionModal] = useState(false);
@@ -97,6 +100,12 @@ export default function HomeScreen() {
   const [productQuantity, setProductQuantity] = useState("1");
   const [productImage, setProductImage] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  useEffect(() => {
+    if (!productId || !ready) return;
+    const product = data.products.find((item) => item.id === productId);
+    if (product) { setSectionId(product.sectionId); setDetailProduct(product); }
+    router.setParams({ productId: undefined });
+  }, [productId, ready, data.products, router]);
 
   const currentSection = data.sections.find((section) => section.id === sectionId) ?? null;
   const sectionProducts = currentSection ? data.products.filter((product) => product.sectionId === currentSection.id) : [];
