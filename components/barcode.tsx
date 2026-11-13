@@ -40,7 +40,10 @@ export function Barcode({
   }, [value]);
 
   if (!bits) return null;
-  const moduleWidth = maxWidth ? Math.min(singleBarWidth, maxWidth / bits.length) : singleBarWidth;
+  const quietModules = 10;
+  const totalModules = bits.length + quietModules * 2;
+  const moduleWidth = maxWidth ? Math.min(singleBarWidth, maxWidth / totalModules) : singleBarWidth;
+  const quietZoneWidth = quietModules * moduleWidth;
   const runs: Array<{ width: number; dark: boolean }> = [];
   let dark = bits[0] === "1";
   let count = 0;
@@ -58,11 +61,13 @@ export function Barcode({
   return (
     <View
       accessibilityLabel={`باركود ${value}`}
-      style={{ height, width: bits.length * moduleWidth, maxWidth, flexDirection: "row", backgroundColor, overflow: "hidden" }}
+      style={{ height, width: totalModules * moduleWidth, maxWidth, flexDirection: "row", backgroundColor, overflow: "hidden" }}
     >
+      <View style={{ width: quietZoneWidth, height, backgroundColor }} />
       {runs.map((run, index) => (
         <View key={index} style={{ width: run.width, height, backgroundColor: run.dark ? lineColor : backgroundColor }} />
       ))}
+      <View style={{ width: quietZoneWidth, height, backgroundColor }} />
     </View>
   );
 }
