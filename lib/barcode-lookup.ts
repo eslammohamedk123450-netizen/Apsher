@@ -65,3 +65,16 @@ export function findBarcodeMatch(
 
   return null;
 }
+
+/** Try the displayed and raw native scanner values, in that order. */
+export function findBarcodeMatchFromScan(
+  data: BarcodeData,
+  scan: { data: string; raw?: string },
+): BarcodeMatch | null {
+  const candidates = [...new Set([scan.data, scan.raw ?? ""].filter(Boolean))];
+  for (const value of candidates) {
+    const match = findBarcodeMatch(data, value);
+    if (match) return match;
+  }
+  return null;
+}

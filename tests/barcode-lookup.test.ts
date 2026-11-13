@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { findBarcodeMatch, normalizeBarcode } from "../lib/barcode-lookup";
+import {
+  findBarcodeMatch,
+  findBarcodeMatchFromScan,
+  normalizeBarcode,
+} from "../lib/barcode-lookup";
 
 describe("barcode lookup", () => {
   const data = {
@@ -23,6 +27,15 @@ describe("barcode lookup", () => {
       type: "product",
       productId: "p-1",
     });
+  });
+
+  it("falls back to the Android raw scanner value", () => {
+    expect(
+      findBarcodeMatchFromScan(data, {
+        data: "formatted display value",
+        raw: "ABS-P-ABC-1234",
+      }),
+    ).toEqual({ type: "product", productId: "p-1" });
   });
 
   it("finds box barcodes", () => {

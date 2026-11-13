@@ -1,4 +1,8 @@
-import { CameraView, useCameraPermissions } from "expo-camera";
+import {
+  CameraView,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+} from "expo-camera";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,7 +23,10 @@ import {
 import { ScreenContainer } from "@/components/screen-container";
 import { Barcode, getCode128Bits } from "@/components/barcode";
 import { useApp } from "@/lib/local-store";
-import { findBarcodeMatch, normalizeBarcode } from "@/lib/barcode-lookup";
+import {
+  findBarcodeMatchFromScan,
+  normalizeBarcode,
+} from "@/lib/barcode-lookup";
 
 const C = {
   navy: "#10253F",
@@ -89,8 +96,10 @@ export default function BarcodesScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [printMode, setPrintMode] = useState<"single" | "grid">("grid");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState("");
   const [permission, requestPermission] = useCameraPermissions();
   const scanHandled = useRef(false);
+  const lastUnknownRef = useRef({ value: "", at: 0 });
 
   const entries = useMemo<Entry[]>(() => {
     const products: Entry[] =
@@ -196,22 +205,34 @@ export default function BarcodesScreen() {
     }
     if (!permission?.granted) await requestPermission();
     scanHandled.current = false;
+    lastUnknownRef.current = { value: "", at: 0 };
+    setScanFeedback("");
     setScannerOpen(true);
   };
 
-  const onScan = ({ data: value }: { data: string }) => {
+  const onScan = (result: BarcodeScanningResult) => {
     if (scanHandled.current) return;
-    const match = findBarcodeMatch(data, value);
+    const match = findBarcodeMatchFromScan(data, result);
     if (!match) {
-      scanHandled.current = true;
-      setScannerOpen(false);
-      Alert.alert(
-        "لم يتم العثور على الباركود",
-        "هذا الرمز غير موجود ضمن البيانات المحفوظة حاليًا. استعد نسخة البيانات التي تحتوي المنتج أو راجع الباركود المطبوع.",
-      );
+      const value = [result.data, result.raw]
+        .filter(
+          (item, index, all) => Boolean(item) && all.indexOf(item) === index,
+        )
+        .join(" · ");
+      const currentTime = Date.now();
+      if (
+        lastUnknownRef.current.value !== value ||
+        currentTime - lastUnknownRef.current.at > 1500
+      ) {
+        lastUnknownRef.current = { value, at: currentTime };
+        setScanFeedback(
+          `قرأت ${result.type} غير مسجل: ${value || "قيمة فارغة"}. وجّه الكاميرا إلى باركود المنتج المطلوب؛ سيظل المسح مفتوحًا.`,
+        );
+      }
       return;
     }
     scanHandled.current = true;
+    setScanFeedback("");
     setScannerOpen(false);
     if (match.type === "box")
       router.navigate({
@@ -445,6 +466,9 @@ export default function BarcodesScreen() {
           />
           <View style={styles.scannerOverlay}>
             <Text style={styles.scannerTitle}>وجّه الكاميرا إلى الباركود</Text>
+            {scanFeedback ? (
+              <Text style={styles.scanFeedback}>{scanFeedback}</Text>
+            ) : null}
             <Pressable
               style={styles.closeScanner}
               onPress={() => setScannerOpen(false)}
@@ -610,6 +634,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,.55)",
     padding: 14,
     borderRadius: 14,
+  },
+  scanFeedback: {
+    color: C.white,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,.72)",
+    marginHorizontal: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
   closeScanner: {
     minWidth: 140,
