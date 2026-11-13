@@ -273,7 +273,7 @@ export default function HomeScreen() {
               <Pressable style={styles.primaryButton} onPress={openAddProduct}><Ionicons name="add" size={20} color={COLORS.white} /><Text style={styles.primaryButtonText}>إضافة منتج</Text></Pressable>
               <Pressable style={styles.ghostButton} onPress={() => deleteSection(currentSection.id)}><Ionicons name="trash-outline" size={18} color={COLORS.red} /><Text style={styles.dangerText}>حذف القسم</Text></Pressable>
             </View>
-            {sectionProducts.length ? sectionProducts.map((product) => <ProductCard key={product.id} product={product} sectionName={currentSection.name} onPress={() => setDetailProduct(product)} onEdit={() => openEditProduct(product)} />) : <EmptyState icon="cube-outline" title="القسم فارغ" text="أضف أول منتج ليظهر هنا." />}
+            {sectionProducts.length ? <View style={styles.gridContainer}>{sectionProducts.map((product) => <GridCard key={product.id} product={product} onPress={() => setDetailProduct(product)} />)}</View> : <EmptyState icon="cube-outline" title="القسم فارغ" text="أضف أول منتج ليظهر هنا." />}
           </View>
         ) : (
           <>
@@ -332,7 +332,16 @@ function StatCard({ number, label, icon }: { number: number; label: string; icon
   return <View style={styles.statCard}><Ionicons name={icon} size={20} color={COLORS.blue} /><Text style={styles.statNumber}>{number}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
-function ProductCard({ product, sectionName, onPress, onEdit }: { product: Product; sectionName: string; onPress: () => void; onEdit: () => void }) {
+
+function GridCard({ product, onPress }: { product: Product; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={styles.gridCard}>
+    <View style={styles.gridImage}>{product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="cover" style={{ width: "100%", height: "100%" }} /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="cube-outline" size={24} color={COLORS.blue} /></View>}</View>
+    <Text style={styles.gridName} numberOfLines={1}>{product.name}</Text>
+    <Text style={styles.gridMeta}>{product.quantity} قطعة</Text>
+  </Pressable>;
+}
+
+function ProductCard(props) { return null; } // Legacy
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.productCard, pressed && { opacity: 0.82 }]}>
     <View style={styles.productThumbFrame}>{product.imageUri ? <Image source={{ uri: product.imageUri }} resizeMode="contain" style={styles.productThumb} /> : <ProductIllustration />}</View>
     <View style={styles.productCopy}><Text style={styles.productName}>{product.name}</Text><Text style={styles.productSection}>{sectionName} · {product.quantity} قطعة متبقية</Text><Text style={styles.productDescription} numberOfLines={2}>{product.description || "بدون وصف"}</Text></View>
@@ -354,6 +363,12 @@ function EmptyState({ icon, title, text, actionLabel, onAction }: { icon: keyof 
 }
 
 const styles = StyleSheet.create({
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" },
+  gridCard: { width: "47%", backgroundColor: COLORS.white, borderRadius: 20, padding: 10, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3, marginBottom: 4 },
+  gridImage: { width: "100%", height: 110, borderRadius: 14, backgroundColor: COLORS.blueLight, marginBottom: 8 },
+  gridName: { color: COLORS.navy, fontSize: 14, fontWeight: "800", textAlign: "right" },
+  gridMeta: { color: COLORS.blue, fontSize: 10, fontWeight: "700", textAlign: "right", marginTop: 4 },
+
   container: { padding: 20, paddingTop: 18, paddingBottom: 44, gap: 18, backgroundColor: COLORS.bg },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: COLORS.bg },
   muted: { color: COLORS.muted, fontSize: 14, textAlign: "center" },
