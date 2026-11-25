@@ -45,11 +45,26 @@ export function useVoiceRecorder() {
   const stop = useCallback(async (): Promise<RecordedVoice | null> => {
     try {
       setBusy(true);
-      const durationMs = state.durationMillis;
+      const durationMs = Math.max(
+        state.durationMillis ?? 0,
+        Math.round((recorder.currentTime ?? 0) * 1000),
+      );
       await recorder.stop();
       const uri = recorder.uri;
-      await setAudioModeAsync({ allowsRecording: false });
+      // بعد التسجيل: ارجع لوضع التشغيل العادي حتى يعمل تشغيل التسجيل فورًا.
+      try {
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+        });
+      } catch {
+        // تجاهل: بعض المنصات لا تحتاج ضبطًا إضافيًا
+      }
       if (!uri) return null;
+      if (durationMs < 500) {
+        Alert.alert("تسجيل قصير", "التسجيل قصير جدًا، جرّب تسجيلًا أطول قليلًا.");
+        return null;
+      }
       return { uri, durationMs };
     } catch {
       Alert.alert("تسجيل الصوت", "تعذر حفظ التسجيل.");
@@ -66,7 +81,10 @@ export function useVoiceRecorder() {
       // تجاهل: ربما لم يبدأ التسجيل فعلًا
     }
     try {
-      await setAudioModeAsync({ allowsRecording: false });
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+      });
     } catch {
       // تجاهل
     }

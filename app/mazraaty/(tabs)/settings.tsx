@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -18,9 +19,9 @@ import { AppHeader } from "@/components/mazraaty/app-header";
 import { confirmAction } from "@/components/mazraaty/confirm";
 import { MZ } from "@/components/mazraaty/theme";
 import { ScreenContainer } from "@/components/screen-container";
+import { downloadResultMessage, type DownloadResult } from "@/lib/download";
 import { useApp } from "@/lib/local-store";
 import {
-  RETENTION_OPTIONS,
   formatDateTime,
   useMazraaty,
 } from "@/lib/mazraaty-store";
@@ -34,11 +35,7 @@ import {
 
 export default function MazraatySettingsScreen() {
   const router = useRouter();
-  const {
-    data,
-    mergeAll,
-    setTrashRetention,
-  } = useMazraaty();
+  const { data, mergeAll } = useMazraaty();
   const {
     pin,
     biometricEnabled,
@@ -58,15 +55,13 @@ export default function MazraatySettingsScreen() {
 
   const run = async (
     label: string,
-    action: () => Promise<string | null>,
+    action: () => Promise<DownloadResult>,
   ) => {
     setBusy(label);
     setMessage("");
     try {
-      const path = await action();
-      setMessage(
-        path ? "تم إنشاء ملف النسخة بنجاح." : "تم إلغاء العملية.",
-      );
+      const result = await action();
+      setMessage(downloadResultMessage(result) ?? "تمت العملية.");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "تعذر تنفيذ العملية",
@@ -339,39 +334,6 @@ export default function MazraatySettingsScreen() {
             ) : null}
           </View>
 
-          <Text style={styles.sectionTitle}>المحذوفات</Text>
-          <View style={styles.card}>
-            <Text style={styles.rowTitle}>مدة الاحتفاظ بالمحذوفات</Text>
-            <Text style={styles.rowDescription}>
-              يتم حذف العناصر القديمة تلقائيًا عند فتح التطبيق.
-            </Text>
-            <View style={styles.retentionRow}>
-              {RETENTION_OPTIONS.map((option) => {
-                const activeOption =
-                  data.settings.trashRetention === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setTrashRetention(option.value)}
-                    style={[
-                      styles.chip,
-                      activeOption && styles.chipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        activeOption && styles.chipTextActive,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
           <View style={styles.tip}>
             <Ionicons name="leaf-outline" size={20} color={MZ.green} />
             <Text style={styles.tipText}>
@@ -392,7 +354,10 @@ export default function MazraatySettingsScreen() {
           animationType="fade"
           onRequestClose={() => setPinModal(false)}
         >
-          <View style={styles.pinBackdrop}>
+          <KeyboardAvoidingView
+            style={styles.pinBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
             <View style={styles.pinCard}>
               <Text style={styles.pinTitle}>تفعيل الرقم السري</Text>
               <Text style={styles.pinHint}>
@@ -424,7 +389,7 @@ export default function MazraatySettingsScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </View>
     </ScreenContainer>

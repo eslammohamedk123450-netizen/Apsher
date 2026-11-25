@@ -4,10 +4,12 @@ import { useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -16,7 +18,8 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { APSHER_RETENTION_OPTIONS, useApp } from "@/lib/local-store";
+import { downloadResultMessage, type DownloadResult } from "@/lib/download";
+import { getAutoBackupPath, useApp } from "@/lib/local-store";
 import { mergeMazraatyIntoStorage } from "@/lib/mazraaty-store";
 import {
   exportSuperNotesBackup,
@@ -60,7 +63,6 @@ export default function SettingsScreen() {
     importZip,
     importAsBox,
     mergeData,
-    setTrashRetention,
     setPin,
     setBiometric,
   } = useApp();
@@ -69,17 +71,28 @@ export default function SettingsScreen() {
   const [pinValue, setPinValue] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const backupPath = getAutoBackupPath();
 
-  const run = async (label: string, action: () => Promise<string | null>) => {
+  const copyBackupPath = async () => {
+    if (!backupPath) return;
+    try {
+      if (Platform.OS === "web") {
+        await navigator.clipboard?.writeText(backupPath);
+      } else {
+        await Share.share({ message: backupPath });
+      }
+      setMessage("مسار ملف الحفظ جاهز للمشاركة أو النسخ.");
+    } catch {
+      setMessage("تعذر نسخ المسار.");
+    }
+  };
+
+  const run = async (label: string, action: () => Promise<DownloadResult>) => {
     setBusy(label);
     setMessage("");
     try {
-      const path = await action();
-      setMessage(
-        path
-          ? `تم إنشاء الملف بنجاح. يمكنك مشاركته أو حفظه من نافذة النظام.`
-          : "تم إلغاء العملية.",
-      );
+      const result = await action();
+      setMessage(downloadResultMessage(result) ?? "تمت العملية.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "تعذر تنفيذ العملية");
     } finally {
@@ -167,12 +180,8 @@ export default function SettingsScreen() {
     setBusy("تصدير الكل");
     setMessage("");
     try {
-      const path = await exportSuperNotesBackup();
-      setMessage(
-        path
-          ? "تم إنشاء نسخة كل المنظومات بنجاح."
-          : "تم إلغاء العملية.",
-      );
+      const result = await exportSuperNotesBackup();
+      setMessage(downloadResultMessage(result) ?? "تم إنشاء نسخة كل المنظومات.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "تعذر التصدير");
     } finally {
@@ -252,6 +261,35 @@ export default function SettingsScreen() {
           <View style={styles.dot} />
         </View>
 
+        <View style={styles.pathCard}>
+          <View style={styles.pathHead}>
+            <Ionicons name="folder-open-outline" size={18} color={C.blue} />
+            <Text style={styles.pathTitle}>مسار ملف الحفظ التلقائي</Text>
+          </View>
+          <Text style={styles.pathValue} selectable>
+            {backupPath ?? "غير متاح على المتصفح"}
+          </Text>
+          <Text style={styles.pathHint}>
+            كل تغيير (قسم/منتج/تعديل/ملاحظة) يُحفظ فورًا داخل التطبيق، ويُحدَّث
+            هذا الملف خلال لحظات.{" "}
+            {deviceBackupEnabled
+              ? "كما تُكتب نسخة في المجلد المشترك الذي اخترته."
+              : "وللاحتفاظ بنسخة تفتحها من مدير الملفات، فعّل «مزامنة ملف على الجهاز» أدناه."}
+          </Text>
+          {backupPath ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.pathBtn,
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={() => void copyBackupPath()}
+            >
+              <Ionicons name="copy-outline" size={15} color={C.blue} />
+              <Text style={styles.pathBtnText}>نسخ المسار</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
         <Text style={styles.sectionTitle}>المنظومات</Text>
         <View style={styles.card}>
           <SettingRow
@@ -276,35 +314,10 @@ export default function SettingsScreen() {
           <SettingRow
             icon="trash-outline"
             title="المحذوفات"
-            description="الاستعادة أو الحذف النهائي، مع تحديد مدة الاحتفاظ"
+            description="الاستعادة أو الحذف النهائي"
             onPress={() => router.push("/apsher/trash")}
             busy={false}
           />
-          <View style={styles.separator} />
-          <View style={styles.retentionBlock}>
-            <Text style={styles.rowTitle}>مدة الاحتفاظ بالمحذوفات</Text>
-            <Text style={styles.rowDescription}>
-              تُحذف العناصر القديمة تلقائيًا عند فتح التطبيق.
-            </Text>
-            <View style={styles.retentionRow}>
-              {APSHER_RETENTION_OPTIONS.map((option) => {
-                const active = data.settings.trashRetention === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setTrashRetention(option.value)}
-                    style={[styles.chip, active && styles.chipActive]}
-                  >
-                    <Text
-                      style={[styles.chipText, active && styles.chipTextActive]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
         </View>
 
         <Text style={styles.sectionTitle}>النسخ الاحتياطي</Text>
@@ -459,7 +472,10 @@ export default function SettingsScreen() {
           animationType="fade"
           onRequestClose={() => setPinModal(false)}
         >
-          <View style={styles.pinBackdrop}>
+          <KeyboardAvoidingView
+            style={styles.pinBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
             <View style={styles.pinCard}>
               <Text style={styles.pinTitle}>تفعيل الرقم السري</Text>
               <Text style={styles.pinHint}>
@@ -491,7 +507,7 @@ export default function SettingsScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
     </ScreenContainer>
@@ -590,6 +606,46 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.green },
+  pathCard: {
+    backgroundColor: C.blueLight,
+    borderRadius: 18,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#CFE2F6",
+  },
+  pathHead: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  pathTitle: { color: C.navy, fontSize: 14, fontWeight: "900" },
+  pathValue: {
+    color: C.navy,
+    fontSize: 12,
+    textAlign: "left",
+    backgroundColor: C.white,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#D5E4F5",
+  },
+  pathHint: { color: C.muted, fontSize: 11, textAlign: "right", lineHeight: 17 },
+  pathBtn: {
+    alignSelf: "flex-end",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: "#BFD8F0",
+  },
+  pathBtnText: { color: C.blue, fontSize: 12, fontWeight: "800" },
   sectionTitle: {
     color: C.navy,
     fontSize: 17,

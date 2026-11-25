@@ -65,7 +65,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconRing: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderRadius: 32,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,

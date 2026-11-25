@@ -62,10 +62,10 @@ const publicRuntime = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.0.0",
+  version: "1.0.46",
   extra: publicRuntime,
   orientation: "portrait",
-  icon: "./assets/images/super-notes-icon.png",
+  icon: "./assets/images/app-icon.png",
   scheme: env.scheme,
   userInterfaceStyle: "automatic",
   ios: {
@@ -77,13 +77,13 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/images/android-icon-foreground.png",
+      backgroundColor: "#2F78C9",
       backgroundImage: "./assets/images/android-icon-background.png",
-      monochromeImage: "./assets/images/android-icon-monochrome.png",
+      foregroundImage: "./assets/images/android-icon-foreground.png",
     },
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
+    softwareKeyboardLayoutMode: "resize",
     permissions: ["POST_NOTIFICATIONS"],
     intentFilters: [
       {
@@ -102,7 +102,7 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
     output: "static",
-    favicon: "./assets/images/favicon.png",
+    favicon: "./assets/images/app-icon.png",
   },
   plugins: [
     "expo-asset",
@@ -125,12 +125,12 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-icon.png",
-        imageWidth: 200,
+        image: "./assets/images/app-icon.png",
+        imageWidth: 220,
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#2F78C9",
         dark: {
-          backgroundColor: "#000000",
+          backgroundColor: "#2F78C9",
         },
       },
     ],

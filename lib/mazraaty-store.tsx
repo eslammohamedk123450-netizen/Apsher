@@ -519,7 +519,10 @@ export async function persistMazraatyAudio(uri: string): Promise<string | null> 
     }
     const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
     if (!root) return uri;
-    const destination = `${root}${makeId("mazraaty-voice")}.m4a`;
+    const ext = (uri.match(/\.[a-z0-9]+(?:\?|$)/i)?.[0] ?? ".m4a")
+      .split("?")[0]
+      .toLowerCase();
+    const destination = `${root}${makeId("mazraaty-voice")}${ext}`;
     await FileSystem.copyAsync({ from: uri, to: destination });
     return destination;
   } catch {

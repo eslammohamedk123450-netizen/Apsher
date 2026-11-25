@@ -4,8 +4,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import * as Sharing from "expo-sharing";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import JSZip from "jszip";
 import React, {
   createContext,
@@ -15,6 +14,12 @@ import React, {
   useMemo,
   useState,
 } from "react";
+
+import {
+  saveBase64ToDownloads,
+  saveTextToDownloads,
+  type DownloadResult,
+} from "@/lib/download";
 
 export type Section = {
   id: string;
@@ -157,8 +162,8 @@ type AppContextValue = {
   purgeTrash: (id: string) => void;
   emptyTrash: () => void;
   setTrashRetention: (value: ApsherRetention) => void;
-  exportCurrent: () => Promise<string | null>;
-  exportZip: () => Promise<string | null>;
+  exportCurrent: () => Promise<DownloadResult>;
+  exportZip: () => Promise<DownloadResult>;
   enableDeviceBackup: () => Promise<boolean>;
   importZip: () => Promise<boolean>;
   importAsBox: () => Promise<string | null>;
@@ -637,37 +642,23 @@ async function writeAutoBackup(data: AppData) {
   return path;
 }
 
-async function persist(data: AppData) {
+async function persist(data: AppData): Promise<boolean | null> {
+  // الحفظ الفوري للبيانات في التخزين المحلي (سريع دائمًا).
   await AsyncStorage.setItem(DATA_KEY, JSON.stringify(data));
-  await writeAutoBackup(data);
+  // كتابة ملف النسخة التلقائية تُجمَّع (debounce) لتفادي إعادة الكتابة مع كل تغيير.
+  syncAppBackupFile();
   const fileUri = await AsyncStorage.getItem(DEVICE_BACKUP_URI_KEY);
-  if (fileUri) {
-    try {
-      await FileSystem.StorageAccessFramework.writeAsStringAsync(
-        fileUri,
-        JSON.stringify(await createAppBackupFile(data), null, 2),
-        {
-          encoding: FileSystem.EncodingType.UTF8,
-        },
-      );
-      return true;
-    } catch {
-      await AsyncStorage.removeItem(DEVICE_BACKUP_URI_KEY);
-      return false;
-    }
-  }
-  return null;
+  return fileUri ? true : null;
 }
 
 /**
- * يحدّث ملف النسخة التلقائية على الجهاز (داخل التطبيق + الملف المشترك) اعتمادًا
- * على بيانات أبشر المحفوظة، مع تضمين بيانات مزرعتي. تُستخدم بعد حفظ أي منظومة
- * حتى لا تتأخر النسخة التلقائية عند تعديل مزرعتي فقط.
+ * ينفّذ فعليًا كتابة ملف النسخة التلقائية داخل التطبيق + الملف المشترك،
+ * اعتمادًا على أحدث بيانات محفوظة في التخزين المحلي.
  */
-export async function syncAppBackupFile(): Promise<void> {
+async function performAppBackupSync(): Promise<boolean | null> {
   try {
     const raw = await AsyncStorage.getItem(DATA_KEY);
-    if (!raw) return;
+    if (!raw) return null;
     const data = normalizeData(JSON.parse(raw) as Partial<AppData>);
     await writeAutoBackup(data);
     const fileUri = await AsyncStorage.getItem(DEVICE_BACKUP_URI_KEY);
@@ -678,13 +669,46 @@ export async function syncAppBackupFile(): Promise<void> {
           JSON.stringify(await createAppBackupFile(data), null, 2),
           { encoding: FileSystem.EncodingType.UTF8 },
         );
+        return true;
       } catch {
         await AsyncStorage.removeItem(DEVICE_BACKUP_URI_KEY);
+        return false;
       }
     }
+    return null;
   } catch {
     /* تجاهل أخطاء النسخة التلقائية؛ الحفظ المحلي تم بالفعل */
+    return null;
   }
+}
+
+let backupSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * يجدول مزامنة ملف النسخة التلقائية بعد تجميع التغييرات (١.٥ ثانية).
+ * البيانات نفسها تُحفظ فورًا في التخزين المحلي؛ هذا فقط للملف الثقيل.
+ */
+export function syncAppBackupFile(): void {
+  if (backupSyncTimer) clearTimeout(backupSyncTimer);
+  backupSyncTimer = setTimeout(() => {
+    backupSyncTimer = null;
+    void performAppBackupSync();
+  }, 1500);
+}
+
+/** يفرض مزامنة فورية (عند خروج التطبيق للخلفية أو قبل الإغلاق). */
+export async function flushAppBackupSync(): Promise<void> {
+  if (backupSyncTimer) {
+    clearTimeout(backupSyncTimer);
+    backupSyncTimer = null;
+  }
+  await performAppBackupSync();
+}
+
+/** مسار ملف الحفظ التلقائي على الجهاز (لعرضه للمستخدم). */
+export function getAutoBackupPath(): string | null {
+  const root = documentRoot();
+  return root ? `${root}${BACKUP_FILE_NAME}` : null;
 }
 
 /** يدمج بيانات أبشر مستوردة داخل التخزين المحلي دون استبدال الموجود. */
@@ -700,16 +724,6 @@ export async function mergeApsherDataIntoStorage(
   await AsyncStorage.setItem(DATA_KEY, JSON.stringify(next));
   await syncAppBackupFile();
   return next;
-}
-
-async function shareFile(path: string, mimeType: string, title: string) {
-  if (Platform.OS !== "web" && (await Sharing.isAvailableAsync())) {
-    await Sharing.shareAsync(path, {
-      mimeType,
-      dialogTitle: title,
-      UTI: mimeType,
-    });
-  }
 }
 
 async function uriToBase64(uri: string) {
@@ -745,22 +759,20 @@ async function saveBase64Image(path: string, base64: string) {
   return destination;
 }
 
-export async function exportDataJson(data: AppData) {
-  const root = documentRoot();
-  if (!root) return null;
-  const path = `${root}emsir-backup-${stamp()}.json`;
-  await FileSystem.writeAsStringAsync(
-    path,
-    JSON.stringify(createBackupFile(data), null, 2),
-    {
-      encoding: FileSystem.EncodingType.UTF8,
-    },
+export async function exportDataJson(
+  data: AppData,
+): Promise<DownloadResult> {
+  const text = JSON.stringify(createBackupFile(data), null, 2);
+  return saveTextToDownloads(
+    `emsir-backup-${stamp()}.json`,
+    text,
+    "application/json",
   );
-  await shareFile(path, "application/json", "تصدير بيانات أبشر");
-  return path;
 }
 
-export async function exportDataZip(data: AppData) {
+export async function exportDataZip(
+  data: AppData,
+): Promise<DownloadResult> {
   const zip = new JSZip();
   const imageRefs: Record<string, string> = {};
   const products = [] as Product[];
@@ -861,14 +873,11 @@ export async function exportDataZip(data: AppData) {
     compression: "DEFLATE",
     compressionOptions: { level: 6 },
   });
-  const root = documentRoot();
-  if (!root) return null;
-  const path = `${root}emsir-backup-${stamp()}.zip`;
-  await FileSystem.writeAsStringAsync(path, base64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  await shareFile(path, "application/zip", "تصدير نسخة أبشر الكاملة");
-  return path;
+  return saveBase64ToDownloads(
+    `emsir-backup-${stamp()}.zip`,
+    base64,
+    "application/zip",
+  );
 }
 
 export async function importDataZip(): Promise<{
@@ -1182,6 +1191,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setReady(true));
   }, []);
 
+  // عند خروج التطبيق للخلفية نُفرغ أي كتابة مؤجلة لملف النسخة التلقائية فورًا.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "background" || next === "inactive") {
+        void flushAppBackupSync();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   const commit = useCallback(
     async (updater: AppData | ((previous: AppData) => AppData)) => {
       const next = normalizeData(
@@ -1443,21 +1462,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const exportCurrent = useCallback(async () => {
-    const path = await exportDataJson(data);
-    if (path) setAutoStatus(`تم تصدير النسخة الحالية · ${formatDate(now())}`);
-    return path;
+    const result = await exportDataJson(data);
+    if (result === "downloads" || result === "shared")
+      setAutoStatus(`تم تصدير النسخة الحالية · ${formatDate(now())}`);
+    return result;
   }, [data]);
 
   const exportZip = useCallback(async () => {
-    const path = await exportDataZip(data);
-    if (path) setAutoStatus(`تم إنشاء ZIP كامل · ${formatDate(now())}`);
-    return path;
+    const result = await exportDataZip(data);
+    if (result === "downloads" || result === "shared")
+      setAutoStatus(`تم إنشاء ZIP كامل · ${formatDate(now())}`);
+    return result;
   }, [data]);
 
   const enableDeviceBackup = useCallback(async () => {
     const selected = await selectDeviceBackupDirectory();
     if (!selected) return false;
     const synced = await persist(data);
+    if (synced === true) await flushAppBackupSync();
     setDeviceBackupEnabled(synced === true);
     if (synced) setAutoStatus(`تم تفعيل ملف المزامنة · ${formatDate(now())}`);
     return synced === true;

@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,7 @@ import {
 import { AppHeader } from "@/components/mazraaty/app-header";
 import { confirmAction } from "@/components/mazraaty/confirm";
 import { MZ } from "@/components/mazraaty/theme";
+import { KeyboardAwareScroll } from "@/components/keyboard-aware-scroll";
 import { ScreenContainer } from "@/components/screen-container";
 import { normalizeBarcode } from "@/lib/barcode-lookup";
 import {
@@ -123,11 +123,7 @@ function SectionForm({ editing }: { editing: MazraatySection | null }) {
           onLauncher={() => router.replace("/")}
         />
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <KeyboardAwareScroll contentContainerStyle={styles.content}>
           <Pressable style={styles.imagePicker} onPress={pickImage}>
             {picking ? (
               <ActivityIndicator color={MZ.green} />
@@ -235,7 +231,7 @@ function SectionForm({ editing }: { editing: MazraatySection | null }) {
               <Text style={styles.dangerText}>حذف القسم</Text>
             </Pressable>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScroll>
       </View>
     </ScreenContainer>
   );

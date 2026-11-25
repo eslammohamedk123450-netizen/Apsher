@@ -1,10 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 import JSZip from "jszip";
 
+import {
+  saveBase64ToDownloads,
+  type DownloadResult,
+} from "@/lib/download";
 import {
   makeId,
   mergeApsherDataIntoStorage,
@@ -215,16 +218,6 @@ async function restoreMedia(
   }
 }
 
-async function shareFile(path: string, mimeType: string, title: string) {
-  if (Platform.OS !== "web" && (await Sharing.isAvailableAsync())) {
-    await Sharing.shareAsync(path, {
-      mimeType,
-      dialogTitle: title,
-      UTI: mimeType,
-    });
-  }
-}
-
 async function pickZipBase64(): Promise<{
   base64: string;
   name: string;
@@ -273,7 +266,9 @@ export async function saveMazraatyPayload(payload: Partial<MazraatyData>) {
 /* نسخة مزرعتي لوحدها                                                  */
 /* ------------------------------------------------------------------ */
 
-export async function exportMazraatyZip(data: MazraatyData) {
+export async function exportMazraatyZip(
+  data: MazraatyData,
+): Promise<DownloadResult> {
   const zip = new JSZip();
   const payload = JSON.parse(JSON.stringify(data)) as MazraatyData;
   await embedMedia(payload, zip, "mazraaty", new Map());
@@ -294,14 +289,11 @@ export async function exportMazraatyZip(data: MazraatyData) {
     compression: "DEFLATE",
     compressionOptions: { level: 6 },
   });
-  const root = documentRoot();
-  if (!root) return null;
-  const path = `${root}mazraaty-backup-${stamp()}.zip`;
-  await FileSystem.writeAsStringAsync(path, base64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  await shareFile(path, "application/zip", "تصدير نسخة مزرعتي");
-  return path;
+  return saveBase64ToDownloads(
+    `mazraaty-backup-${stamp()}.zip`,
+    base64,
+    "application/zip",
+  );
 }
 
 export async function importMazraatyBackup(): Promise<Partial<MazraatyData> | null> {
@@ -339,7 +331,7 @@ export async function importMazraatyBackup(): Promise<Partial<MazraatyData> | nu
 /* النسخة الكاملة (كل المنظومات)                                       */
 /* ------------------------------------------------------------------ */
 
-export async function exportSuperNotesBackup() {
+export async function exportSuperNotesBackup(): Promise<DownloadResult> {
   const [apsherRaw, mazraatyRaw] = await Promise.all([
     AsyncStorage.getItem(APSHER_DATA_KEY),
     AsyncStorage.getItem(MAZRAATY_DATA_KEY),
@@ -394,14 +386,11 @@ export async function exportSuperNotesBackup() {
     compression: "DEFLATE",
     compressionOptions: { level: 6 },
   });
-  const root = documentRoot();
-  if (!root) return null;
-  const path = `${root}super-notes-backup-${stamp()}.zip`;
-  await FileSystem.writeAsStringAsync(path, base64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  await shareFile(path, "application/zip", "تصدير نسخة Super Notes الكاملة");
-  return path;
+  return saveBase64ToDownloads(
+    `super-notes-backup-${stamp()}.zip`,
+    base64,
+    "application/zip",
+  );
 }
 
 export type SuperImportResult = {

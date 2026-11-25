@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,7 @@ import {
 import { AppHeader } from "@/components/mazraaty/app-header";
 import { confirmAction } from "@/components/mazraaty/confirm";
 import { MZ } from "@/components/mazraaty/theme";
+import { KeyboardAwareScroll } from "@/components/keyboard-aware-scroll";
 import { ScreenContainer } from "@/components/screen-container";
 import { useMazraaty, type MazraatyItem } from "@/lib/mazraaty-store";
 
@@ -108,11 +108,7 @@ function ItemForm({
           onLauncher={() => router.replace("/")}
         />
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <KeyboardAwareScroll contentContainerStyle={styles.content}>
           <Pressable style={styles.imagePicker} onPress={pickImage}>
             {picking ? (
               <ActivityIndicator color={MZ.green} />
@@ -195,7 +191,7 @@ function ItemForm({
               <Text style={styles.dangerText}>حذف العنصر</Text>
             </Pressable>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScroll>
       </View>
     </ScreenContainer>
   );
