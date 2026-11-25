@@ -28,7 +28,7 @@ const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
   // App branding - update these values directly (do not use env vars)
-  appName: "أبشر - إدارة الأدوات والمستهلك",
+  appName: "Super Notes",
   appSlug: "emsir",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
@@ -65,7 +65,7 @@ const config: ExpoConfig = {
   version: "1.0.0",
   extra: publicRuntime,
   orientation: "portrait",
-  icon: "./assets/images/icon.png",
+  icon: "./assets/images/super-notes-icon.png",
   scheme: env.scheme,
   userInterfaceStyle: "automatic",
   ios: {

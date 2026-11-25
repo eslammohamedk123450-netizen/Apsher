@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -24,9 +25,13 @@ import { ScreenContainer } from "@/components/screen-container";
 import { Barcode, getCode128Bits } from "@/components/barcode";
 import { useApp } from "@/lib/local-store";
 import {
+  findBarcodeMatch,
   findBarcodeMatchFromScan,
+  findBarcodeByName,
   normalizeBarcode,
+  type BarcodeMatch,
 } from "@/lib/barcode-lookup";
+import { decodeBarcodeFromImage, pickBarcodeImage } from "@/lib/barcode-image";
 
 const C = {
   navy: "#10253F",
@@ -38,6 +43,7 @@ const C = {
   border: "#DCE4EF",
   orange: "#F59E0B",
   green: "#16846E",
+  red: "#CF4B4B",
 };
 
 type Entry = {
@@ -97,6 +103,9 @@ export default function BarcodesScreen() {
   const [printMode, setPrintMode] = useState<"single" | "grid">("grid");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState("");
+  const [manualCode, setManualCode] = useState("");
+  const [manualFeedback, setManualFeedback] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const scanHandled = useRef(false);
   const lastUnknownRef = useRef({ value: "", at: 0 });
@@ -182,7 +191,7 @@ export default function BarcodesScreen() {
           `<article class="card"><h2>${escapeHtml(entry.name)}</h2><p>${entry.type === "box" ? "صندوق" : entry.type === "box-item" ? "منتج داخل صندوق" : "منتج"}</p><div class="bars">${pdfBars(entry.barcode)}</div><strong>${escapeHtml(entry.barcode)}</strong></article>`,
       )
       .join("");
-    const html = `<html dir="rtl"><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:Arial;padding:20px;color:#10253F}.sheet{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.card{text-align:center;border:1px solid #DCE4EF;border-radius:12px;padding:20px;break-inside:avoid;${printMode === "single" ? "page-break-after:always;min-height:90vh;display:flex;flex-direction:column;justify-content:center;" : ""}}h2{font-size:24px;margin:4px}.card p{color:#2F78C9}.bars{width:100%;height:90px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:18px 0}.bars svg{max-width:100%;height:90px}strong{font-size:15px;letter-spacing:2px}</style></head><body><main class="sheet">${cards}</main></body></html>`;
+    const html = `<html dir="rtl"><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:Arial;padding:20px;color:#10253F}.sheet{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.card{text-align:center;border:1px solid #DCE4EF;border-radius:12px;padding:20px;break-inside:avoid;${printMode === "single" ? "page-break-after:always;min-height:90vh;display:flex;flex-direction:column;justify-content:center;" : ""}}h2{font-size:24px;margin:4px}.card p{color:#2F78C9}.bars{width:100%;height:90px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:18px 0;border:1px solid #DCE4EF;border-radius:10px;background:#fff}.bars svg{max-width:100%;height:90px}strong{font-size:15px;letter-spacing:2px}</style></head><body><main class="sheet">${cards}</main></body></html>`;
     const result = await Print.printToFileAsync({ html });
     if (
       Platform.OS !== "web" &&
@@ -210,6 +219,25 @@ export default function BarcodesScreen() {
     setScannerOpen(true);
   };
 
+  /** ينتقل مباشرة إلى المنتج أو الصندوق المطابق. */
+  const navigateToMatch = (match: BarcodeMatch) => {
+    if (match.type === "box")
+      router.navigate({
+        pathname: "/apsher/boxes",
+        params: { boxId: match.boxId },
+      });
+    else if (match.type === "box-item")
+      router.navigate({
+        pathname: "/apsher/boxes",
+        params: { boxId: match.boxId, itemId: match.itemId },
+      });
+    else
+      router.navigate({
+        pathname: "/apsher",
+        params: { productId: match.productId },
+      });
+  };
+
   const onScan = (result: BarcodeScanningResult) => {
     if (scanHandled.current) return;
     const match = findBarcodeMatchFromScan(data, result);
@@ -234,21 +262,51 @@ export default function BarcodesScreen() {
     scanHandled.current = true;
     setScanFeedback("");
     setScannerOpen(false);
-    if (match.type === "box")
-      router.navigate({
-        pathname: "/(tabs)/boxes",
-        params: { boxId: match.boxId },
-      });
-    else if (match.type === "box-item")
-      router.navigate({
-        pathname: "/(tabs)/boxes",
-        params: { boxId: match.boxId, itemId: match.itemId },
-      });
-    else
-      router.navigate({
-        pathname: "/(tabs)",
-        params: { productId: match.productId },
-      });
+    navigateToMatch(match);
+  };
+
+  /** يقرأ باركودًا من صورة في المعرض ثم ينتقل للمطابق. */
+  const scanFromImage = async () => {
+    try {
+      setImageBusy(true);
+      setManualFeedback("");
+      const uri = await pickBarcodeImage();
+      if (!uri) return;
+      const code = await decodeBarcodeFromImage(uri);
+      if (!code) {
+        setManualFeedback("لم أجد باركودًا واضحًا في الصورة. جرّب صورة أوضح.");
+        return;
+      }
+      setManualCode(code);
+      const match =
+        findBarcodeMatch(data, code) ?? findBarcodeByName(data, code);
+      if (!match) {
+        setManualFeedback(`قرأت «${code}» لكنه غير مسجّل.`);
+        return;
+      }
+      setManualFeedback("");
+      setManualCode("");
+      navigateToMatch(match);
+    } catch (error) {
+      setManualFeedback(
+        error instanceof Error ? error.message : "تعذر قراءة الصورة.",
+      );
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  /** تحقق يدوي من باركود مكتوب (أو اسم) ثم الانتقال إلى المطابق. */
+  const verifyManualCode = () => {
+    const value = manualCode.trim();
+    const match = findBarcodeMatch(data, value) ?? findBarcodeByName(data, value);
+    if (!match) {
+      setManualFeedback("لا يوجد منتج أو صندوق بهذا الباركود أو الاسم.");
+      return;
+    }
+    setManualFeedback("");
+    setManualCode("");
+    navigateToMatch(match);
   };
 
   return (
@@ -338,6 +396,48 @@ export default function BarcodesScreen() {
           <Pressable onPress={openScanner}>
             <Ionicons name="scan-outline" size={22} color={C.blue} />
           </Pressable>
+        </View>
+        <View style={styles.verifyBox}>
+          <Text style={styles.verifyLabel}>تحقق أو ابحث بالاسم / الباركود</Text>
+          <View style={styles.verifyRow}>
+            <TextInput
+              value={manualCode}
+              onChangeText={(value) => {
+                setManualCode(value);
+                if (manualFeedback) setManualFeedback("");
+              }}
+              placeholder="اكتب الباركود أو الاسم ثم تحقق"
+              placeholderTextColor="#8D9AAF"
+              autoCapitalize="characters"
+              onSubmitEditing={verifyManualCode}
+              style={styles.verifyInput}
+              textAlign="right"
+            />
+            <Pressable
+              style={styles.verifyBtn}
+              onPress={verifyManualCode}
+              accessibilityLabel="تحقق"
+            >
+              <Ionicons name="navigate-outline" size={18} color={C.white} />
+              <Text style={styles.verifyBtnText}>تحقق</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            style={styles.imageScanBtn}
+            onPress={() => void scanFromImage()}
+            disabled={imageBusy}
+            accessibilityLabel="قراءة باركود من صورة"
+          >
+            {imageBusy ? (
+              <ActivityIndicator size="small" color={C.blue} />
+            ) : (
+              <Ionicons name="images-outline" size={18} color={C.blue} />
+            )}
+            <Text style={styles.imageScanText}>قراءة من صورة</Text>
+          </Pressable>
+          {manualFeedback ? (
+            <Text style={styles.verifyFeedback}>{manualFeedback}</Text>
+          ) : null}
         </View>
         <View style={styles.actionRow}>
           <Pressable style={styles.primary} onPress={exportPdf}>
@@ -489,6 +589,9 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     gap: 14,
     backgroundColor: C.bg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerCopy: { flex: 1, alignItems: "flex-end" },
@@ -538,6 +641,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   searchInput: { flex: 1, color: C.navy, fontSize: 14, paddingVertical: 9 },
+  verifyBox: {
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    padding: 12,
+    gap: 8,
+  },
+  verifyLabel: {
+    color: C.navy,
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  verifyRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  verifyInput: {
+    flex: 1,
+    minHeight: 46,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    color: C.navy,
+    fontSize: 14,
+  },
+  verifyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    minHeight: 46,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: C.blue,
+  },
+  verifyBtnText: { color: C.white, fontSize: 13, fontWeight: "900" },
+  imageScanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.blue,
+    backgroundColor: C.blueLight,
+  },
+  imageScanText: { color: C.blue, fontSize: 13, fontWeight: "800" },
+  verifyFeedback: { color: C.red, fontSize: 12, textAlign: "right" },
   actionRow: { flexDirection: "row", gap: 9 },
   primary: {
     flex: 1,

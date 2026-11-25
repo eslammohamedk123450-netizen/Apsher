@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -25,12 +26,27 @@ function ModalShell({ visible, title, onClose, children }: { visible: boolean; t
 
 export default function ConsumerScreen() {
   const { data, commit } = useApp();
+  const router = useRouter();
+  const { productId } = useLocalSearchParams<{ productId?: string }>();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [consumeQuantity, setConsumeQuantity] = useState("1");
   const [usageDescription, setUsageDescription] = useState("");
+
+  useEffect(() => {
+    if (!productId) return;
+    const product = data.products.find((item) => item.id === productId);
+    if (product) {
+      // فتح نموذج الاستهلاك مباشرة على المنتج المطلوب من قائمة الضغط المطوّل.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedProduct(product);
+      setProductSearch("");
+      setModalOpen(true);
+    }
+    router.setParams({ productId: undefined });
+  }, [productId, data.products, router]);
 
   const term = search.trim().toLocaleLowerCase();
   const records = data.consumerRecords.filter((record) => [record.productSnapshot.name, record.sectionName, record.usageDescription].some((value) => value.toLocaleLowerCase().includes(term)));
@@ -112,7 +128,7 @@ export default function ConsumerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingTop: 18, paddingBottom: 44, gap: 16, backgroundColor: C.bg },
+  container: { padding: 20, paddingTop: 18, paddingBottom: 44, gap: 16, backgroundColor: C.bg, width: "100%", maxWidth: 720, alignSelf: "center" },
   header: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerCopy: { flex: 1, alignItems: "flex-end" },
   eyebrow: { color: C.orange, fontSize: 12, fontWeight: "800", marginBottom: 4 },

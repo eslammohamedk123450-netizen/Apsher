@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
@@ -15,7 +16,12 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { useApp } from "@/lib/local-store";
+import { APSHER_RETENTION_OPTIONS, useApp } from "@/lib/local-store";
+import { mergeMazraatyIntoStorage } from "@/lib/mazraaty-store";
+import {
+  exportSuperNotesBackup,
+  importSuperNotesBackup,
+} from "@/lib/super-backup";
 
 const C = {
   navy: "#10253F",
@@ -53,9 +59,12 @@ export default function SettingsScreen() {
     exportZip,
     importZip,
     importAsBox,
+    mergeData,
+    setTrashRetention,
     setPin,
     setBiometric,
   } = useApp();
+  const router = useRouter();
   const [pinModal, setPinModal] = useState(false);
   const [pinValue, setPinValue] = useState("");
   const [busy, setBusy] = useState("");
@@ -134,18 +143,77 @@ export default function SettingsScreen() {
 
   const restore = () =>
     confirmImport(
-      "سيتم استبدال البيانات الحالية بالنسخة التي تختارها. هل تريد المتابعة؟",
+      "سيتم دمج النسخة التي تختارها مع البيانات الحالية (الأقسام تتطابق بالاسم). هل تريد المتابعة؟",
       async () => {
         setBusy("استرداد");
         try {
           const ok = await importZip();
           setMessage(
-            ok ? "تم استرداد البيانات والصور بنجاح." : "تم إلغاء الاسترداد.",
+            ok
+              ? "تم استرداد البيانات والصور ودمجها مع الموجود."
+              : "تم إلغاء الاسترداد.",
           );
         } catch (error) {
           setMessage(
             error instanceof Error ? error.message : "ملف ZIP غير صالح",
           );
+        } finally {
+          setBusy("");
+        }
+      },
+    );
+
+  const exportAll = async () => {
+    setBusy("تصدير الكل");
+    setMessage("");
+    try {
+      const path = await exportSuperNotesBackup();
+      setMessage(
+        path
+          ? "تم إنشاء نسخة كل المنظومات بنجاح."
+          : "تم إلغاء العملية.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "تعذر التصدير");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const restoreAll = () =>
+    confirmImport(
+      "سيتم دمج بيانات أبشر ومزرعتي من النسخة المختارة مع بياناتك الحالية. هل تريد المتابعة؟",
+      async () => {
+        setBusy("استرداد الكل");
+        setMessage("");
+        try {
+          const result = await importSuperNotesBackup();
+          if (!result) {
+            setMessage("تم إلغاء الاسترداد.");
+            return;
+          }
+          if (result.apsher) await mergeData(result.apsher);
+          if (result.mazraaty)
+            await mergeMazraatyIntoStorage(
+              result.mazraaty as Parameters<
+                typeof mergeMazraatyIntoStorage
+              >[0],
+            );
+          const systems = [
+            result.apsher ? "أبشر" : null,
+            result.mazraaty ? "مزرعتي" : null,
+          ]
+            .filter(Boolean)
+            .join(" + ");
+          setMessage(
+            `تم استرداد ودمج: ${systems}.${
+              result.mazraaty
+                ? " أعد فتح التطبيق أو انتقل إلى مزرعتي لرؤية بياناتها."
+                : ""
+            }`,
+          );
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "ملف غير صالح");
         } finally {
           setBusy("");
         }
@@ -184,8 +252,81 @@ export default function SettingsScreen() {
           <View style={styles.dot} />
         </View>
 
+        <Text style={styles.sectionTitle}>المنظومات</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="grid-outline"
+            title="الرجوع إلى المنظومات"
+            description="عد إلى شاشة اختيار المنظومات أو افتح منظومة أخرى"
+            onPress={() => router.replace("/")}
+            busy={false}
+          />
+        </View>
+
+        <Text style={styles.sectionTitle}>الأرشيف والمحذوفات</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="archive-outline"
+            title="الأرشيف"
+            description="الأقسام والمنتجات والصناديق المؤرشفة، مع إمكانية الاستعادة"
+            onPress={() => router.push("/apsher/archive")}
+            busy={false}
+          />
+          <View style={styles.separator} />
+          <SettingRow
+            icon="trash-outline"
+            title="المحذوفات"
+            description="الاستعادة أو الحذف النهائي، مع تحديد مدة الاحتفاظ"
+            onPress={() => router.push("/apsher/trash")}
+            busy={false}
+          />
+          <View style={styles.separator} />
+          <View style={styles.retentionBlock}>
+            <Text style={styles.rowTitle}>مدة الاحتفاظ بالمحذوفات</Text>
+            <Text style={styles.rowDescription}>
+              تُحذف العناصر القديمة تلقائيًا عند فتح التطبيق.
+            </Text>
+            <View style={styles.retentionRow}>
+              {APSHER_RETENTION_OPTIONS.map((option) => {
+                const active = data.settings.trashRetention === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setTrashRetention(option.value)}
+                    style={[styles.chip, active && styles.chipActive]}
+                  >
+                    <Text
+                      style={[styles.chipText, active && styles.chipTextActive]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>النسخ الاحتياطي</Text>
         <View style={styles.card}>
+          <SettingRow
+            icon="layers-outline"
+            title="تصدير نسخة كاملة (كل المنظومات)"
+            description="ملف واحد فيه أبشر ومزرعتي مع الصور والتسجيلات"
+            onPress={() => void exportAll()}
+            busy={busy === "تصدير الكل"}
+            accent
+          />
+          <View style={styles.separator} />
+          <SettingRow
+            icon="cloud-upload-outline"
+            title="استرداد النسخة الكاملة"
+            description="يستعيد أبشر ومزرعتي من ملف واحد بعد تأكيد"
+            onPress={restoreAll}
+            busy={busy === "استرداد الكل"}
+            accent
+          />
+          <View style={styles.separator} />
           <SettingRow
             icon="download-outline"
             title="تصدير النسخة الحالية"
@@ -402,6 +543,9 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     gap: 16,
     backgroundColor: C.bg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerCopy: { flex: 1, alignItems: "flex-end" },
@@ -510,6 +654,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 11,
   },
+  retentionBlock: { paddingVertical: 13, gap: 3 },
+  retentionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  chipActive: { backgroundColor: C.blue, borderColor: C.blue },
+  chipText: { color: C.navy, fontSize: 12, fontWeight: "800" },
+  chipTextActive: { color: C.white },
   securityIcon: {
     width: 40,
     height: 40,

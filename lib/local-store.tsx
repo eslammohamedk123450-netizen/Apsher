@@ -19,7 +19,9 @@ import React, {
 export type Section = {
   id: string;
   name: string;
+  imageUri?: string | null;
   createdAt: string;
+  archivedAt?: string | null;
 };
 
 export type Product = {
@@ -32,6 +34,7 @@ export type Product = {
   imageUri?: string | null;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
 };
 
 export type BoxItem = {
@@ -59,6 +62,7 @@ export type Box = {
   items: BoxItem[];
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
 };
 
 export type ConsumerRecord = {
@@ -72,12 +76,62 @@ export type ConsumerRecord = {
   addedAt: string;
 };
 
+export type ApsherRetention = "24h" | "7d" | "30d" | "never";
+
+export type ApsherTrashKind = "section" | "product" | "box";
+
+export type ApsherTrashEntry = {
+  id: string;
+  kind: ApsherTrashKind;
+  title: string;
+  imageUri?: string | null;
+  deletedAt: string;
+  /** لقطة كاملة للقسم مع منتجاته */
+  section?: Section;
+  products?: Product[];
+  /** لقطة لمنتج واحد */
+  product?: Product;
+  /** لقطة لصندوق بمحتوياته */
+  box?: Box;
+};
+
+export type ApsherSettings = {
+  trashRetention: ApsherRetention;
+};
+
+export const DEFAULT_APSHER_SETTINGS: ApsherSettings = { trashRetention: "7d" };
+
+export const APSHER_RETENTION_OPTIONS: {
+  value: ApsherRetention;
+  label: string;
+}[] = [
+  { value: "24h", label: "كل 24 ساعة" },
+  { value: "7d", label: "كل 7 أيام" },
+  { value: "30d", label: "كل 30 يومًا" },
+  { value: "never", label: "أبدًا (لا تحذف تلقائيًا)" },
+];
+
+export const apsherRetentionMs = (value: ApsherRetention): number | null => {
+  switch (value) {
+    case "24h":
+      return 24 * 60 * 60 * 1000;
+    case "7d":
+      return 7 * 24 * 60 * 60 * 1000;
+    case "30d":
+      return 30 * 24 * 60 * 60 * 1000;
+    default:
+      return null;
+  }
+};
+
 export type AppData = {
   version: 2;
   sections: Section[];
   products: Product[];
   boxes: Box[];
   consumerRecords: ConsumerRecord[];
+  trash: ApsherTrashEntry[];
+  settings: ApsherSettings;
   updatedAt: string;
 };
 
@@ -91,6 +145,18 @@ type AppContextValue = {
   commit: (
     updater: AppData | ((previous: AppData) => AppData),
   ) => Promise<void>;
+  replaceData: (incoming: Partial<AppData>) => Promise<void>;
+  mergeData: (incoming: Partial<AppData>) => Promise<void>;
+  archiveSection: (id: string, archived: boolean) => void;
+  archiveProduct: (id: string, archived: boolean) => void;
+  archiveBox: (id: string, archived: boolean) => void;
+  removeSection: (id: string) => void;
+  removeProduct: (id: string) => void;
+  removeBox: (id: string) => void;
+  restoreTrash: (id: string) => void;
+  purgeTrash: (id: string) => void;
+  emptyTrash: () => void;
+  setTrashRetention: (value: ApsherRetention) => void;
   exportCurrent: () => Promise<string | null>;
   exportZip: () => Promise<string | null>;
   enableDeviceBackup: () => Promise<boolean>;
@@ -103,6 +169,9 @@ type AppContextValue = {
 };
 
 const DATA_KEY = "emsir.app.data.v1";
+// مفتاح مخزن منظومة «مزرعتي»، لضمّ بياناتها في النسخة الاحتياطية على
+// مستوى التطبيق. نستخدم القيمة النصية لتفادي الاستيراد الدائري.
+const MAZRAATY_DATA_KEY = "mazraaty.app.data.v1";
 const PIN_KEY = "emsir.app.pin";
 const BIOMETRIC_KEY = "emsir.app.biometric";
 const META_KEY = "emsir.app.backup.meta";
@@ -204,6 +273,8 @@ export const emptyData = (): AppData => ({
   products: [],
   boxes: [],
   consumerRecords: [],
+  trash: [],
+  settings: { ...DEFAULT_APSHER_SETTINGS },
   updatedAt: now(),
 });
 
@@ -227,6 +298,26 @@ export const makeId = (prefix: string) =>
 export const makeBarcode = (kind: "product" | "box") =>
   `ABS-${kind === "product" ? "P" : "B"}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+/**
+ * باركود ثابت مشتق من المعرّف، يُستخدم فقط للبيانات القديمة التي لا تحمل
+ * باركودًا محفوظًا. لأنه يعتمد على المعرّف الثابت فلا يتغيّر بين التحميلات
+ * ولا عند تعديل العنصر، وبذلك تبقى النسخة المطبوعة صالحة.
+ */
+export const barcodeFromId = (prefix: string, seed: string) => {
+  let hash = 0x811c9dc5;
+  const text = seed || "barcode";
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const code = (hash >>> 0)
+    .toString(36)
+    .toUpperCase()
+    .padStart(7, "0")
+    .slice(-7);
+  return `${prefix}-${code}`;
+};
+
 function normalizeData(input: Partial<AppData>): AppData {
   const products = (Array.isArray(input.products) ? input.products : []).map(
     (product) => ({
@@ -238,7 +329,12 @@ function normalizeData(input: Partial<AppData>): AppData {
         typeof (product as Partial<Product>).barcode === "string" &&
         (product as Partial<Product>).barcode
           ? (product as Partial<Product>).barcode
-          : makeBarcode("product"),
+          : barcodeFromId(
+              "ABS-P",
+              (product as Partial<Product>).id ||
+                (product as Partial<Product>).name ||
+                "product",
+            ),
     }),
   ) as Product[];
   const boxesInput = Array.isArray(input.boxes) ? input.boxes : [];
@@ -262,7 +358,10 @@ function normalizeData(input: Partial<AppData>): AppData {
           ),
         ),
       );
-      if (!barcodeAliases.length) barcodeAliases.push(makeBarcode("product"));
+      if (!barcodeAliases.length)
+        barcodeAliases.push(
+          barcodeFromId("ABS-P", id || item.productName || "box-item"),
+        );
       const { barcode: _legacyIndividualBarcode, ...itemWithoutBarcode } =
         item as Partial<BoxItem> & { barcode?: string };
       return {
@@ -281,7 +380,12 @@ function normalizeData(input: Partial<AppData>): AppData {
         typeof (box as Partial<Box>).barcode === "string" &&
         (box as Partial<Box>).barcode
           ? (box as Partial<Box>).barcode
-          : makeBarcode("box"),
+          : barcodeFromId(
+              "ABS-B",
+              (box as Partial<Box>).id ||
+                (box as Partial<Box>).name ||
+                "box",
+            ),
       name:
         typeof (box as Partial<Box>).name === "string"
           ? (box as Partial<Box>).name
@@ -306,14 +410,139 @@ function normalizeData(input: Partial<AppData>): AppData {
         )
       : 1,
   })) as ConsumerRecord[];
+  const sectionsInput = Array.isArray(input.sections) ? input.sections : [];
+  const sections = sectionsInput.map((section) => ({
+    ...section,
+    id:
+      typeof section?.id === "string" && section.id
+        ? section.id
+        : makeId("section"),
+    name: typeof section?.name === "string" ? section.name : "",
+    imageUri: section?.imageUri ?? null,
+    createdAt:
+      typeof section?.createdAt === "string" ? section.createdAt : now(),
+    archivedAt: section?.archivedAt ?? null,
+  })) as Section[];
+  const trash = (Array.isArray(input.trash) ? input.trash : []).map((entry) => ({
+    id:
+      typeof entry?.id === "string" && entry.id ? entry.id : makeId("trash"),
+    kind:
+      entry?.kind === "product" || entry?.kind === "box"
+        ? entry.kind
+        : ("section" as ApsherTrashKind),
+    title: typeof entry?.title === "string" ? entry.title : "",
+    imageUri: entry?.imageUri ?? null,
+    deletedAt:
+      typeof entry?.deletedAt === "string" ? entry.deletedAt : now(),
+    section: entry?.section,
+    products: Array.isArray(entry?.products) ? entry.products : undefined,
+    product: entry?.product,
+    box: entry?.box,
+  })) as ApsherTrashEntry[];
+  const retention: ApsherRetention =
+    input.settings?.trashRetention === "24h" ||
+    input.settings?.trashRetention === "30d" ||
+    input.settings?.trashRetention === "never" ||
+    input.settings?.trashRetention === "7d"
+      ? input.settings.trashRetention
+      : DEFAULT_APSHER_SETTINGS.trashRetention;
   return {
     version: 2,
-    sections: Array.isArray(input.sections) ? input.sections : [],
+    sections,
     products,
     boxes,
     consumerRecords,
+    trash,
+    settings: { trashRetention: retention },
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : now(),
   };
+}
+
+/** يحذف محذوفات أبشر القديمة حسب مدة الاحتفاظ. */
+function purgeExpired(data: AppData): AppData {
+  const window = apsherRetentionMs(data.settings.trashRetention);
+  if (window === null) return data;
+  const cutoff = Date.now() - window;
+  const trash = data.trash.filter(
+    (entry) => new Date(entry.deletedAt).getTime() >= cutoff,
+  );
+  return trash.length === data.trash.length ? data : { ...data, trash };
+}
+
+/**
+ * دمج نسخة مستوردة مع البيانات الحالية:
+ * - الأقسام تتطابق بالاسم، فيُضاف المحتوى للقسم الموجود أو يُنشأ قسم جديد.
+ * - المنتجات تتبع قسمها الأصلي في النسخة بعد إعادة الربط.
+ * - الصناديق وسجل الاستهلاك والمحذوفات تُضاف.
+ */
+function mergeAppData(current: AppData, incoming: Partial<AppData>): AppData {
+  const next: AppData = {
+    ...current,
+    sections: [...current.sections],
+    products: [...current.products],
+    boxes: [...current.boxes],
+    consumerRecords: [...current.consumerRecords],
+    trash: [...current.trash],
+  };
+
+  const sectionByName = new Map<string, Section>();
+  for (const section of next.sections)
+    sectionByName.set(section.name.trim(), section);
+
+  const sectionIdMap = new Map<string, string>();
+  for (const source of normalizeData({ sections: incoming.sections }).sections) {
+    const key = source.name.trim();
+    const existing = key ? sectionByName.get(key) : undefined;
+    if (existing) {
+      if (!existing.imageUri && source.imageUri) {
+        const merged = { ...existing, imageUri: source.imageUri };
+        const at = next.sections.indexOf(existing);
+        if (at >= 0) next.sections[at] = merged;
+        sectionByName.set(key, merged);
+      }
+      sectionIdMap.set(source.id, existing.id);
+    } else {
+      const id = next.sections.some((s) => s.id === source.id)
+        ? makeId("section")
+        : source.id;
+      const created = { ...source, id };
+      next.sections.push(created);
+      sectionIdMap.set(source.id, id);
+      if (key) sectionByName.set(key, created);
+    }
+  }
+
+  const productIds = new Set(next.products.map((p) => p.id));
+  for (const source of normalizeData({ products: incoming.products }).products) {
+    const sectionId = sectionIdMap.get(source.sectionId) ?? source.sectionId;
+    if (!next.sections.some((s) => s.id === sectionId)) continue;
+    const id = productIds.has(source.id) ? makeId("product") : source.id;
+    productIds.add(id);
+    next.products.push({ ...source, id, sectionId });
+  }
+
+  const boxNames = new Set(next.boxes.map((b) => b.name.trim()).filter(Boolean));
+  for (const box of normalizeData({ boxes: incoming.boxes }).boxes) {
+    const key = box.name.trim();
+    if (key && boxNames.has(key)) continue;
+    const id = next.boxes.some((b) => b.id === box.id) ? makeId("box") : box.id;
+    if (key) boxNames.add(key);
+    next.boxes.push({ ...box, id });
+  }
+
+  const recordIds = new Set(next.consumerRecords.map((r) => r.id));
+  for (const record of incoming.consumerRecords ?? []) {
+    if (recordIds.has(record.id)) continue;
+    recordIds.add(record.id);
+    next.consumerRecords.push(record);
+  }
+
+  for (const entry of normalizeData({ trash: incoming.trash }).trash) {
+    if (next.trash.some((t) => t.id === entry.id)) continue;
+    next.trash.push(entry);
+  }
+
+  return next;
 }
 
 function dataFingerprint(data: AppData) {
@@ -335,6 +564,28 @@ function createBackupFile(data: AppData, lastSyncedAt = now()) {
     fingerprint: dataFingerprint(data),
     data,
   };
+}
+
+/**
+ * النسخة الاحتياطية على مستوى التطبيق: نفس ملف أبشر مع إضافة بيانات بقية
+ * المنظومات (مزرعتي) في الحقل superNotes. تبقى بصمة أبشر وحقوله كما هي،
+ * لذا تعمل النسخة مع أي إصدار قديم، وتتجاهلها النسخ القديمة إن لم تعرفها.
+ */
+async function readSuperNotesPayload() {
+  try {
+    const raw = await AsyncStorage.getItem(MAZRAATY_DATA_KEY);
+    if (!raw) return null;
+    const mazraaty = JSON.parse(raw) as unknown;
+    return { mazraaty };
+  } catch {
+    return null;
+  }
+}
+
+async function createAppBackupFile(data: AppData, lastSyncedAt = now()) {
+  const base = createBackupFile(data, lastSyncedAt);
+  const superNotes = await readSuperNotesPayload();
+  return superNotes ? { ...base, superNotes } : base;
 }
 
 function unpackBackupFile(raw: unknown): Partial<AppData> {
@@ -369,7 +620,7 @@ async function writeAutoBackup(data: AppData) {
   const syncedAt = now();
   await FileSystem.writeAsStringAsync(
     path,
-    JSON.stringify(createBackupFile(data, syncedAt), null, 2),
+    JSON.stringify(await createAppBackupFile(data, syncedAt), null, 2),
     {
       encoding: FileSystem.EncodingType.UTF8,
     },
@@ -394,7 +645,7 @@ async function persist(data: AppData) {
     try {
       await FileSystem.StorageAccessFramework.writeAsStringAsync(
         fileUri,
-        JSON.stringify(createBackupFile(data), null, 2),
+        JSON.stringify(await createAppBackupFile(data), null, 2),
         {
           encoding: FileSystem.EncodingType.UTF8,
         },
@@ -406,6 +657,49 @@ async function persist(data: AppData) {
     }
   }
   return null;
+}
+
+/**
+ * يحدّث ملف النسخة التلقائية على الجهاز (داخل التطبيق + الملف المشترك) اعتمادًا
+ * على بيانات أبشر المحفوظة، مع تضمين بيانات مزرعتي. تُستخدم بعد حفظ أي منظومة
+ * حتى لا تتأخر النسخة التلقائية عند تعديل مزرعتي فقط.
+ */
+export async function syncAppBackupFile(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(DATA_KEY);
+    if (!raw) return;
+    const data = normalizeData(JSON.parse(raw) as Partial<AppData>);
+    await writeAutoBackup(data);
+    const fileUri = await AsyncStorage.getItem(DEVICE_BACKUP_URI_KEY);
+    if (fileUri) {
+      try {
+        await FileSystem.StorageAccessFramework.writeAsStringAsync(
+          fileUri,
+          JSON.stringify(await createAppBackupFile(data), null, 2),
+          { encoding: FileSystem.EncodingType.UTF8 },
+        );
+      } catch {
+        await AsyncStorage.removeItem(DEVICE_BACKUP_URI_KEY);
+      }
+    }
+  } catch {
+    /* تجاهل أخطاء النسخة التلقائية؛ الحفظ المحلي تم بالفعل */
+  }
+}
+
+/** يدمج بيانات أبشر مستوردة داخل التخزين المحلي دون استبدال الموجود. */
+export async function mergeApsherDataIntoStorage(
+  payload: Partial<AppData>,
+): Promise<AppData> {
+  const raw = await AsyncStorage.getItem(DATA_KEY);
+  const current = raw
+    ? normalizeData(JSON.parse(raw) as Partial<AppData>)
+    : emptyData();
+  const next = mergeAppData(current, payload);
+  next.updatedAt = now();
+  await AsyncStorage.setItem(DATA_KEY, JSON.stringify(next));
+  await syncAppBackupFile();
+  return next;
 }
 
 async function shareFile(path: string, mimeType: string, title: string) {
@@ -479,6 +773,22 @@ export async function exportDataZip(data: AppData) {
     return reference;
   };
 
+  const sections: Section[] = [];
+  for (const section of data.sections) {
+    const copy = { ...section };
+    if (section.imageUri) {
+      try {
+        copy.imageUri = await addImage(
+          section.imageUri,
+          `section-${section.id}.jpg`,
+        );
+      } catch {
+        copy.imageUri = null;
+      }
+    }
+    sections.push(copy);
+  }
+
   for (const product of data.products) {
     const copy = { ...product };
     if (product.imageUri) {
@@ -534,7 +844,13 @@ export async function exportDataZip(data: AppData) {
     consumers.push({ ...record, productSnapshot: snapshot });
   }
 
-  const exportData = { ...data, products, boxes, consumerRecords: consumers };
+  const exportData = {
+    ...data,
+    sections,
+    products,
+    boxes,
+    consumerRecords: consumers,
+  };
   zip.file("data.json", JSON.stringify(createBackupFile(exportData), null, 2));
   zip.file(
     "README.txt",
@@ -592,6 +908,15 @@ export async function importDataZip(): Promise<{
     lastSyncedAt =
       typeof parsed.lastSyncedAt === "string" ? parsed.lastSyncedAt : undefined;
     raw = unpackBackupFile(parsed);
+    const superNotes = parsed.superNotes as
+      | { mazraaty?: unknown }
+      | undefined;
+    if (superNotes?.mazraaty) {
+      await AsyncStorage.setItem(
+        MAZRAATY_DATA_KEY,
+        JSON.stringify(superNotes.mazraaty),
+      );
+    }
   }
   const dataFile = zip?.file("data.json");
   if (zip && !dataFile) throw new Error("ملف ZIP لا يحتوي على data.json");
@@ -619,6 +944,8 @@ export async function importDataZip(): Promise<{
     imageCache[reference] = restored;
     return restored;
   };
+  for (const section of imported.sections)
+    section.imageUri = await restoreReference(section.imageUri);
   for (const product of imported.products)
     product.imageUri = await restoreReference(product.imageUri);
   for (const box of imported.boxes) {
@@ -630,6 +957,14 @@ export async function importDataZip(): Promise<{
     record.productSnapshot.imageUri = await restoreReference(
       record.productSnapshot.imageUri,
     );
+  }
+  for (const entry of imported.trash) {
+    entry.imageUri = await restoreReference(entry.imageUri);
+    if (entry.section) entry.section.imageUri = await restoreReference(entry.section.imageUri);
+    for (const product of entry.products ?? [])
+      product.imageUri = await restoreReference(product.imageUri);
+    if (entry.product) entry.product.imageUri = await restoreReference(entry.product.imageUri);
+    if (entry.box) entry.box.imageUri = await restoreReference(entry.box.imageUri);
   }
   return { data: imported, lastSyncedAt };
 }
@@ -799,7 +1134,7 @@ export async function loadInitialState() {
     AsyncStorage.getItem(DEVICE_BACKUP_URI_KEY),
   ]);
   const rawParsed = rawData ? JSON.parse(rawData) : null;
-  const data = rawParsed ? normalizeData(rawParsed) : emptyData();
+  const data = rawParsed ? purgeExpired(normalizeData(rawParsed)) : emptyData();
   let effectiveBackupMeta = backupMeta;
   if (rawParsed && JSON.stringify(data) !== JSON.stringify(rawParsed)) {
     await persist(data);
@@ -875,6 +1210,238 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data],
   );
 
+  const replaceData = useCallback(async (incoming: Partial<AppData>) => {
+    const next = normalizeData(incoming);
+    next.updatedAt = now();
+    setData(next);
+    const externalSynced = await persist(next);
+    if (externalSynced === false) setDeviceBackupEnabled(false);
+    setAutoStatus(`تم الاسترداد · ${formatDate(next.updatedAt)}`);
+  }, []);
+
+  const mergeData = useCallback(
+    async (incoming: Partial<AppData>) => {
+      const next = mergeAppData(data, incoming);
+      next.updatedAt = now();
+      setData(next);
+      const externalSynced = await persist(next);
+      if (externalSynced === false) setDeviceBackupEnabled(false);
+      setAutoStatus(`تم الاسترداد والدمج · ${formatDate(next.updatedAt)}`);
+    },
+    [data],
+  );
+
+  const archiveSection = useCallback(
+    (id: string, archived: boolean) => {
+      commit((previous) => ({
+        ...previous,
+        sections: previous.sections.map((section) =>
+          section.id === id
+            ? { ...section, archivedAt: archived ? now() : null }
+            : section,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const archiveProduct = useCallback(
+    (id: string, archived: boolean) => {
+      commit((previous) => ({
+        ...previous,
+        products: previous.products.map((product) =>
+          product.id === id
+            ? { ...product, archivedAt: archived ? now() : null }
+            : product,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const archiveBox = useCallback(
+    (id: string, archived: boolean) => {
+      commit((previous) => ({
+        ...previous,
+        boxes: previous.boxes.map((box) =>
+          box.id === id ? { ...box, archivedAt: archived ? now() : null } : box,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const removeSection = useCallback(
+    (id: string) => {
+      commit((previous) => {
+        const section = previous.sections.find((item) => item.id === id);
+        if (!section) return previous;
+        const products = previous.products.filter(
+          (product) => product.sectionId === id,
+        );
+        const entry: ApsherTrashEntry = {
+          id: makeId("trash"),
+          kind: "section",
+          title: section.name,
+          imageUri: section.imageUri ?? null,
+          deletedAt: now(),
+          section,
+          products,
+        };
+        return {
+          ...previous,
+          sections: previous.sections.filter((item) => item.id !== id),
+          products: previous.products.filter(
+            (product) => product.sectionId !== id,
+          ),
+          trash: [entry, ...previous.trash],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const removeProduct = useCallback(
+    (id: string) => {
+      commit((previous) => {
+        const product = previous.products.find((item) => item.id === id);
+        if (!product) return previous;
+        const entry: ApsherTrashEntry = {
+          id: makeId("trash"),
+          kind: "product",
+          title: product.name,
+          imageUri: product.imageUri ?? null,
+          deletedAt: now(),
+          product,
+        };
+        return {
+          ...previous,
+          products: previous.products.filter((item) => item.id !== id),
+          trash: [entry, ...previous.trash],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const removeBox = useCallback(
+    (id: string) => {
+      commit((previous) => {
+        const box = previous.boxes.find((item) => item.id === id);
+        if (!box) return previous;
+        const entry: ApsherTrashEntry = {
+          id: makeId("trash"),
+          kind: "box",
+          title: box.name,
+          imageUri: box.imageUri ?? null,
+          deletedAt: now(),
+          box,
+        };
+        return {
+          ...previous,
+          boxes: previous.boxes.filter((item) => item.id !== id),
+          trash: [entry, ...previous.trash],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const restoreTrash = useCallback(
+    (id: string) => {
+      commit((previous) => {
+        const entry = previous.trash.find((item) => item.id === id);
+        if (!entry) return previous;
+        const trash = previous.trash.filter((item) => item.id !== id);
+        if (entry.kind === "section" && entry.section) {
+          const conflict = previous.sections.some(
+            (section) => section.id === entry.section!.id,
+          );
+          const sectionId = conflict ? makeId("section") : entry.section.id;
+          const section = { ...entry.section, id: sectionId, archivedAt: null };
+          const productIds = new Set(previous.products.map((p) => p.id));
+          const restoredProducts = (entry.products ?? []).map((product) => {
+            const productId = productIds.has(product.id)
+              ? makeId("product")
+              : product.id;
+            return {
+              ...product,
+              id: productId,
+              sectionId,
+              archivedAt: null,
+            };
+          });
+          return {
+            ...previous,
+            sections: [...previous.sections, section],
+            products: [...previous.products, ...restoredProducts],
+            trash,
+          };
+        }
+        if (entry.kind === "product" && entry.product) {
+          const product = entry.product;
+          const fallbackSectionId =
+            previous.sections.find((s) => s.id === product.sectionId)?.id ??
+            previous.sections[0]?.id;
+          if (!fallbackSectionId) return { ...previous, trash };
+          const productId = previous.products.some((p) => p.id === product.id)
+            ? makeId("product")
+            : product.id;
+          return {
+            ...previous,
+            products: [
+              ...previous.products,
+              {
+                ...product,
+                id: productId,
+                sectionId: fallbackSectionId,
+                archivedAt: null,
+              },
+            ],
+            trash,
+          };
+        }
+        if (entry.kind === "box" && entry.box) {
+          const box = entry.box;
+          const boxId = previous.boxes.some((b) => b.id === box.id)
+            ? makeId("box")
+            : box.id;
+          return {
+            ...previous,
+            boxes: [...previous.boxes, { ...box, id: boxId, archivedAt: null }],
+            trash,
+          };
+        }
+        return { ...previous, trash };
+      });
+    },
+    [commit],
+  );
+
+  const purgeTrash = useCallback(
+    (id: string) => {
+      commit((previous) => ({
+        ...previous,
+        trash: previous.trash.filter((item) => item.id !== id),
+      }));
+    },
+    [commit],
+  );
+
+  const emptyTrash = useCallback(() => {
+    commit((previous) => ({ ...previous, trash: [] }));
+  }, [commit]);
+
+  const setTrashRetention = useCallback(
+    (value: ApsherRetention) => {
+      commit((previous) => ({
+        ...previous,
+        settings: { ...previous.settings, trashRetention: value },
+      }));
+    },
+    [commit],
+  );
+
   const exportCurrent = useCallback(async () => {
     const path = await exportDataJson(data);
     if (path) setAutoStatus(`تم تصدير النسخة الحالية · ${formatDate(now())}`);
@@ -899,14 +1466,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const importZip = useCallback(async () => {
     const backup = await importDataZip();
     if (!backup) return false;
-    setData(backup.data);
-    const externalSynced = await persist(backup.data);
-    if (externalSynced === false) setDeviceBackupEnabled(false);
+    await mergeData(backup.data);
     setAutoStatus(
-      `تم الاسترداد · آخر مزامنة في الملف: ${formatDate(backup.lastSyncedAt ?? backup.data.updatedAt)}`,
+      `تم الاسترداد والدمج · آخر مزامنة في الملف: ${formatDate(backup.lastSyncedAt ?? backup.data.updatedAt)}`,
     );
     return true;
-  }, []);
+  }, [mergeData]);
 
   const importAsBox = useCallback(async () => {
     const parsed = await parseImportedProducts();
@@ -978,6 +1543,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pin,
       biometricEnabled,
       commit,
+      replaceData,
+      mergeData,
+      archiveSection,
+      archiveProduct,
+      archiveBox,
+      removeSection,
+      removeProduct,
+      removeBox,
+      restoreTrash,
+      purgeTrash,
+      emptyTrash,
+      setTrashRetention,
       exportCurrent,
       exportZip,
       enableDeviceBackup,
@@ -996,6 +1573,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pin,
       biometricEnabled,
       commit,
+      replaceData,
+      mergeData,
+      archiveSection,
+      archiveProduct,
+      archiveBox,
+      removeSection,
+      removeProduct,
+      removeBox,
+      restoreTrash,
+      purgeTrash,
+      emptyTrash,
+      setTrashRetention,
       exportCurrent,
       exportZip,
       enableDeviceBackup,

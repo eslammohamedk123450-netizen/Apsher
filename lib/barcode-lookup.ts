@@ -1,14 +1,14 @@
 export type BarcodeData = {
-  products: Array<{ id: string; barcode: string }>;
-  boxes: Array<{
+  products: { id: string; barcode: string }[];
+  boxes: {
     id: string;
     barcode: string;
-    items: Array<{
+    items: {
       id: string;
       barcode?: string;
       barcodeAliases?: string[];
-    }>;
-  }>;
+    }[];
+  }[];
 };
 
 export type BarcodeMatch =
@@ -76,5 +76,112 @@ export function findBarcodeMatchFromScan(
     const match = findBarcodeMatch(data, value);
     if (match) return match;
   }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* منظومة مزرعتي: قسم (باركود اختياري) → عنصر (باركود تلقائي)          */
+/* ------------------------------------------------------------------ */
+
+export type MazraatyBarcodeData = {
+  sections: { id: string; barcode?: string }[];
+  items: { id: string; sectionId: string; barcode: string }[];
+};
+
+export type MazraatyBarcodeMatch =
+  | { type: "section"; sectionId: string }
+  | { type: "item"; sectionId: string; itemId: string };
+
+/** يبحث عن مطابقة باركود في مزرعتي: القسم أولًا ثم العنصر. */
+export function findMazraatyBarcodeMatch(
+  data: MazraatyBarcodeData,
+  value: string,
+): MazraatyBarcodeMatch | null {
+  const scanned = normalizeBarcode(value);
+  if (!scanned) return null;
+
+  const section = data.sections.find(
+    (entry) => entry.barcode && normalizeBarcode(entry.barcode) === scanned,
+  );
+  if (section) return { type: "section", sectionId: section.id };
+
+  const item = data.items.find(
+    (entry) => normalizeBarcode(entry.barcode) === scanned,
+  );
+  if (item) return { type: "item", sectionId: item.sectionId, itemId: item.id };
+
+  return null;
+}
+
+/** يجرّب قيمة الكاميرا الظاهرة والخام بنفس ترتيب التطبيق. */
+export function findMazraatyBarcodeMatchFromScan(
+  data: MazraatyBarcodeData,
+  scan: { data: string; raw?: string },
+): MazraatyBarcodeMatch | null {
+  const candidates = [...new Set([scan.data, scan.raw ?? ""].filter(Boolean))];
+  for (const value of candidates) {
+    const match = findMazraatyBarcodeMatch(data, value);
+    if (match) return match;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* البحث بالاسم أو الرقم النصّي عند عدم وجود باركود مطابق               */
+/* ------------------------------------------------------------------ */
+
+export type BarcodeNameData = {
+  products: { id: string; name: string }[];
+  boxes: {
+    id: string;
+    name: string;
+    items: { id: string; productName: string }[];
+  }[];
+};
+
+/** يبحث في أبشر بالاسم: منتج → صندوق → منتج داخل صندوق. */
+export function findBarcodeByName(
+  data: BarcodeNameData,
+  query: string,
+): BarcodeMatch | null {
+  const text = query.trim().toLocaleLowerCase();
+  if (!text) return null;
+  const match = (value: string) => value.toLocaleLowerCase().includes(text);
+
+  const product = data.products.find((entry) => match(entry.name ?? ""));
+  if (product) return { type: "product", productId: product.id };
+
+  const box = data.boxes.find((entry) => match(entry.name ?? ""));
+  if (box) return { type: "box", boxId: box.id };
+
+  for (const candidate of data.boxes) {
+    const item = candidate.items.find((entry) => match(entry.productName ?? ""));
+    if (item)
+      return { type: "box-item", boxId: candidate.id, itemId: item.id };
+  }
+  return null;
+}
+
+export type MazraatyNameData = {
+  sections: { id: string; name: string }[];
+  items: { id: string; sectionId: string; name: string }[];
+};
+
+/** يبحث في مزرعتي بالاسم: قسم ثم عنصر. */
+export function findMazraatyByName(
+  data: MazraatyNameData,
+  query: string,
+): MazraatyBarcodeMatch | null {
+  const text = query.trim().toLocaleLowerCase();
+  if (!text) return null;
+  const match = (value: string) => value.toLocaleLowerCase().includes(text);
+
+  const section = data.sections.find((entry) => match(entry.name ?? ""));
+  if (section) return { type: "section", sectionId: section.id };
+
+  const item = data.items.find((entry) => match(entry.name ?? ""));
+  if (item)
+    return { type: "item", sectionId: item.sectionId, itemId: item.id };
+
   return null;
 }

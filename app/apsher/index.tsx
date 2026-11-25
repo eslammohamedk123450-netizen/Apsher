@@ -17,12 +17,14 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { ActionSheet } from "@/components/mazraaty/action-sheet";
 import { VoiceInput } from "@/components/voice-input";
 import {
   formatDate,
   makeBarcode,
   makeId,
   Product,
+  Section,
   useApp,
 } from "@/lib/local-store";
 
@@ -47,6 +49,9 @@ const styles = StyleSheet.create({
     paddingBottom: 44,
     gap: 18,
     backgroundColor: COLORS.bg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   loading: {
     flex: 1,
@@ -253,6 +258,60 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: 4,
   },
+  topBar: { flexDirection: "row", alignItems: "center" },
+  launcherBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 11,
+    backgroundColor: COLORS.blueLight,
+  },
+  launcherText: { color: COLORS.blue, fontSize: 12, fontWeight: "800" },
+  sectionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  sectionTile: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    maxWidth: "49%",
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    gap: 6,
+  },
+  sectionTileImageWrap: { position: "relative" },
+  sectionTileImage: { width: "100%", aspectRatio: 1, borderRadius: 14 },
+  sectionTilePlaceholder: {
+    backgroundColor: COLORS.blueLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  numberBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 7,
+    backgroundColor: COLORS.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  numberText: { color: COLORS.white, fontSize: 13, fontWeight: "900" },
+  sectionTileName: {
+    color: COLORS.navy,
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  sectionTileMeta: {
+    color: COLORS.muted,
+    fontSize: 11,
+    textAlign: "right",
+  },
   detailHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   backButton: {
     flexDirection: "row",
@@ -397,6 +456,11 @@ const styles = StyleSheet.create({
   imagePlaceholder: { alignItems: "center", gap: 8 },
   imagePickerText: { color: COLORS.blue, fontSize: 13, fontWeight: "700" },
   previewImage: { width: "100%", height: 190, backgroundColor: COLORS.white },
+  sectionImagePreview: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: COLORS.white,
+  },
   detailImage: {
     width: "100%",
     height: 220,
@@ -532,7 +596,17 @@ function ModalShell({
 }
 
 export default function HomeScreen() {
-  const { data, ready, autoStatus, commit, pickImage } = useApp();
+  const {
+    data,
+    ready,
+    autoStatus,
+    commit,
+    pickImage,
+    archiveSection,
+    archiveProduct,
+    removeSection,
+    removeProduct,
+  } = useApp();
   const { productId } = useLocalSearchParams<{ productId?: string }>();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -540,6 +614,9 @@ export default function HomeScreen() {
   const [sectionModal, setSectionModal] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [sectionName, setSectionName] = useState("");
+  const [sectionImage, setSectionImage] = useState<string | null>(null);
+  const [sectionMenuFor, setSectionMenuFor] = useState<Section | null>(null);
+  const [productMenuFor, setProductMenuFor] = useState<Product | null>(null);
   const [productModal, setProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productName, setProductName] = useState("");
@@ -559,15 +636,35 @@ export default function HomeScreen() {
     router.setParams({ productId: undefined });
   }, [productId, ready, data.products, router]);
 
+  const archivedSectionIds = useMemo(
+    () =>
+      new Set(
+        data.sections.filter((section) => section.archivedAt).map((s) => s.id),
+      ),
+    [data.sections],
+  );
+  const activeSections = useMemo(
+    () => data.sections.filter((section) => !section.archivedAt),
+    [data.sections],
+  );
+  const activeProducts = useMemo(
+    () =>
+      data.products.filter(
+        (product) =>
+          !product.archivedAt && !archivedSectionIds.has(product.sectionId),
+      ),
+    [data.products, archivedSectionIds],
+  );
+
   const currentSection =
-    data.sections.find((section) => section.id === sectionId) ?? null;
+    activeSections.find((section) => section.id === sectionId) ?? null;
   const sectionProducts = currentSection
-    ? data.products.filter((product) => product.sectionId === currentSection.id)
+    ? activeProducts.filter((product) => product.sectionId === currentSection.id)
     : [];
   const searchTerm = search.trim().toLocaleLowerCase();
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
-    return data.products.filter((product) => {
+    return activeProducts.filter((product) => {
       const section = data.sections.find(
         (item) => item.id === product.sectionId,
       );
@@ -575,7 +672,7 @@ export default function HomeScreen() {
         (value) => value.toLocaleLowerCase().includes(searchTerm),
       );
     });
-  }, [data.products, data.sections, searchTerm]);
+  }, [activeProducts, data.sections, searchTerm]);
 
   const openAddProduct = () => {
     setEditingProduct(null);
@@ -597,6 +694,32 @@ export default function HomeScreen() {
     setDetailProduct(null);
   };
 
+  const openCreateSection = () => {
+    setEditingSectionId(null);
+    setSectionName("");
+    setSectionImage(null);
+    setSectionModal(true);
+  };
+
+  const openEditSection = (section: Section) => {
+    setEditingSectionId(section.id);
+    setSectionName(section.name);
+    setSectionImage(section.imageUri ?? null);
+    setSectionModal(true);
+  };
+
+  const chooseSectionImage = async () => {
+    try {
+      const image = await pickImage();
+      if (image) setSectionImage(image);
+    } catch (error) {
+      Alert.alert(
+        "الصورة",
+        error instanceof Error ? error.message : "تعذر اختيار الصورة",
+      );
+    }
+  };
+
   const saveSection = async () => {
     const clean = sectionName.trim();
     if (!clean) return;
@@ -605,7 +728,7 @@ export default function HomeScreen() {
         ...previous,
         sections: previous.sections.map((section) =>
           section.id === editingSectionId
-            ? { ...section, name: clean }
+            ? { ...section, name: clean, imageUri: sectionImage }
             : section,
         ),
       }));
@@ -617,12 +740,14 @@ export default function HomeScreen() {
           {
             id: makeId("section"),
             name: clean,
+            imageUri: sectionImage,
             createdAt: new Date().toISOString(),
           },
         ],
       }));
     }
     setSectionName("");
+    setSectionImage(null);
     setEditingSectionId(null);
     setSectionModal(false);
   };
@@ -679,12 +804,32 @@ export default function HomeScreen() {
   };
 
   const deleteProduct = (product: Product) => {
-    confirmAction("حذف المنتج", `هل تريد حذف «${product.name}»؟`, () => {
-      void commit((previous) => ({
-        ...previous,
-        products: previous.products.filter((item) => item.id !== product.id),
-      }));
-      setDetailProduct(null);
+    confirmAction(
+      "حذف المنتج",
+      `سيتم نقل «${product.name}» إلى المحذوفات. متأكد؟`,
+      () => {
+        removeProduct(product.id);
+        setDetailProduct(null);
+      },
+    );
+  };
+
+  const archiveProductAction = (product: Product) => {
+    confirmAction(
+      "أرشفة المنتج",
+      `سيتم نقل «${product.name}» إلى الأرشيف. متأكد؟`,
+      () => {
+        archiveProduct(product.id, true);
+        setDetailProduct(null);
+      },
+    );
+  };
+
+  const consumeProduct = (product: Product) => {
+    setDetailProduct(null);
+    router.push({
+      pathname: "/apsher/consumer",
+      params: { productId: product.id },
     });
   };
 
@@ -693,13 +838,9 @@ export default function HomeScreen() {
     if (!section) return;
     confirmAction(
       "حذف القسم",
-      `سيتم حذف القسم ومنتجاته: «${section.name}»`,
+      `سيتم نقل القسم «${section.name}» وكل منتجاته إلى المحذوفات. متأكد؟`,
       () => {
-        void commit((previous) => ({
-          ...previous,
-          sections: previous.sections.filter((item) => item.id !== id),
-          products: previous.products.filter((item) => item.sectionId !== id),
-        }));
+        removeSection(id);
         setSectionId(null);
       },
     );
@@ -734,6 +875,17 @@ export default function HomeScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.topBar}>
+          <Pressable
+            style={styles.launcherBtn}
+            onPress={() => router.replace("/")}
+            hitSlop={6}
+          >
+            <Ionicons name="grid-outline" size={16} color={COLORS.blue} />
+            <Text style={styles.launcherText}>المنظومات</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.brandRow}>
           <View style={styles.brandCopy}>
             <Text style={styles.eyebrow}>دفتر التشغيل المحلي</Text>
@@ -793,6 +945,7 @@ export default function HomeScreen() {
                     key={product.id}
                     product={product}
                     onPress={() => setDetailProduct(product)}
+                    onLongPress={() => setProductMenuFor(product)}
                   />
                 ))}
               </View>
@@ -841,6 +994,7 @@ export default function HomeScreen() {
                     key={product.id}
                     product={product}
                     onPress={() => setDetailProduct(product)}
+                    onLongPress={() => setProductMenuFor(product)}
                   />
                 ))}
               </View>
@@ -856,12 +1010,12 @@ export default function HomeScreen() {
           <>
             <View style={styles.statsRow}>
               <StatCard
-                number={data.sections.length}
+                number={activeSections.length}
                 label="الأقسام"
                 icon="layers-outline"
               />
               <StatCard
-                number={data.products.length}
+                number={activeProducts.length}
                 label="المنتجات"
                 icon="cube-outline"
               />
@@ -873,87 +1027,72 @@ export default function HomeScreen() {
             </View>
             <View style={styles.blockHeader}>
               <Text style={styles.blockTitle}>الأقسام</Text>
-              <Pressable
-                style={styles.addSmallButton}
-                onPress={() => {
-                  setEditingSectionId(null);
-                  setSectionName("");
-                  setSectionModal(true);
-                }}
-              >
+              <Pressable style={styles.addSmallButton} onPress={openCreateSection}>
                 <Ionicons name="add" size={18} color={COLORS.white} />
                 <Text style={styles.addSmallText}>قسم جديد</Text>
               </Pressable>
             </View>
-            {data.sections.length ? (
-              data.sections.map((section) => (
-                <Pressable
-                  key={section.id}
-                  onPress={() => setSectionId(section.id)}
-                  style={({ pressed }) => [
-                    styles.sectionCard,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                >
-                  <View style={styles.sectionAccent} />
-                  <View style={styles.sectionCardContent}>
-                    <View style={styles.sectionArrow}>
-                      <Ionicons
-                        name="chevron-back"
-                        size={20}
-                        color={COLORS.blue}
-                      />
+            {activeSections.length ? (
+              <View style={styles.sectionGrid}>
+                {activeSections.map((section, index) => (
+                  <Pressable
+                    key={section.id}
+                    onPress={() => setSectionId(section.id)}
+                    onLongPress={() => setSectionMenuFor(section)}
+                    delayLongPress={320}
+                    style={({ pressed }) => [
+                      styles.sectionTile,
+                      pressed && { opacity: 0.86 },
+                    ]}
+                  >
+                    <View style={styles.sectionTileImageWrap}>
+                      {section.imageUri ? (
+                        <Image
+                          source={{ uri: section.imageUri }}
+                          resizeMode="cover"
+                          style={styles.sectionTileImage}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.sectionTileImage,
+                            styles.sectionTilePlaceholder,
+                          ]}
+                        >
+                          <Ionicons
+                            name="folder-open-outline"
+                            size={38}
+                            color={COLORS.blue}
+                          />
+                        </View>
+                      )}
+                      <View style={styles.numberBadge}>
+                        <Text style={styles.numberText}>{index + 1}</Text>
+                      </View>
                     </View>
-                    <View style={styles.sectionCardText}>
-                      <Text style={styles.sectionName}>{section.name}</Text>
-                      <Text style={styles.sectionMeta}>
-                        {
-                          data.products.filter(
-                            (product) => product.sectionId === section.id,
-                          ).length
-                        }{" "}
-                        منتج ·{" "}
-                        {data.products
-                          .filter((product) => product.sectionId === section.id)
-                          .reduce(
-                            (sum, product) => sum + product.quantity,
-                            0,
-                          )}{" "}
-                        قطعة متبقية
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        setEditingSectionId(section.id);
-                        setSectionName(section.name);
-                        setSectionModal(true);
-                      }}
-                      style={styles.editSectionButton}
-                    >
-                      <Ionicons
-                        name="create-outline"
-                        size={18}
-                        color={COLORS.blue}
-                      />
-                    </Pressable>
-                    <View style={styles.sectionIcon}>
-                      <Ionicons
-                        name="folder-open-outline"
-                        size={23}
-                        color={COLORS.blue}
-                      />
-                    </View>
-                  </View>
-                </Pressable>
-              ))
+                    <Text style={styles.sectionTileName} numberOfLines={1}>
+                      {section.name}
+                    </Text>
+                    <Text style={styles.sectionTileMeta}>
+                      {
+                        data.products.filter(
+                          (product) =>
+                            product.sectionId === section.id &&
+                            !product.archivedAt,
+                        ).length
+                      }{" "}
+                      منتج
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             ) : (
               <EmptyState
                 icon="folder-open-outline"
                 title="ابدأ بإضافة أول قسم"
-                text="اجعل أدواتك مرتبة باسم واضح يسهل البحث عنه."
+                text="اجعل أدواتك مرتبة باسم وصورة واضحة تظهر كأيقونة مميزة."
                 actionLabel="إضافة قسم"
-                onAction={() => setSectionModal(true)}
+                onAction={openCreateSection}
               />
             )}
           </>
@@ -966,7 +1105,7 @@ export default function HomeScreen() {
         onClose={() => setSectionModal(false)}
       >
         <Text style={styles.modalHint}>
-          اكتب اسمًا قصيرًا وواضحًا للقسم، مثل «عدة» أو «بروستر».
+          اكتب اسمًا قصيرًا وواضحًا للقسم، وأضف صورة تظهر كأيقونة مربعة.
         </Text>
         <Field
           label="اسم القسم"
@@ -974,6 +1113,20 @@ export default function HomeScreen() {
           onChangeText={setSectionName}
           placeholder="مثال: عدة"
         />
+        <Pressable style={styles.imagePicker} onPress={chooseSectionImage}>
+          {sectionImage ? (
+            <Image
+              source={{ uri: sectionImage }}
+              resizeMode="cover"
+              style={styles.sectionImagePreview}
+            />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons name="image-outline" size={28} color={COLORS.blue} />
+              <Text style={styles.imagePickerText}>اختيار صورة القسم</Text>
+            </View>
+          )}
+        </Pressable>
         <Pressable
           style={[styles.primaryButton, !sectionName.trim() && styles.disabled]}
           disabled={!sectionName.trim()}
@@ -1095,6 +1248,78 @@ export default function HomeScreen() {
           </>
         ) : null}
       </ModalShell>
+
+      <ActionSheet
+        visible={Boolean(sectionMenuFor)}
+        title={sectionMenuFor?.name}
+        onClose={() => setSectionMenuFor(null)}
+        accentColor={COLORS.blue}
+        accentSoft={COLORS.blueLight}
+        dangerColor={COLORS.red}
+        actions={
+          sectionMenuFor
+            ? [
+                {
+                  icon: "create-outline",
+                  label: "تعديل القسم",
+                  onPress: () => openEditSection(sectionMenuFor),
+                },
+                {
+                  icon: "archive-outline",
+                  label: "أرشفة القسم",
+                  onPress: () =>
+                    confirmAction(
+                      "أرشفة القسم",
+                      `سيتم نقل قسم «${sectionMenuFor.name}» إلى الأرشيف. متأكد؟`,
+                      () => archiveSection(sectionMenuFor.id, true),
+                    ),
+                },
+                {
+                  icon: "trash-outline",
+                  label: "حذف القسم",
+                  danger: true,
+                  onPress: () => deleteSection(sectionMenuFor.id),
+                },
+              ]
+            : []
+        }
+      />
+
+      <ActionSheet
+        visible={Boolean(productMenuFor)}
+        title={productMenuFor?.name}
+        onClose={() => setProductMenuFor(null)}
+        accentColor={COLORS.blue}
+        accentSoft={COLORS.blueLight}
+        dangerColor={COLORS.red}
+        actions={
+          productMenuFor
+            ? [
+                {
+                  icon: "create-outline",
+                  label: "تعديل المنتج",
+                  onPress: () => openEditProduct(productMenuFor),
+                },
+                {
+                  icon: "checkmark-done-outline",
+                  label: "وضع في الاستهلاك",
+                  onPress: () => consumeProduct(productMenuFor),
+                },
+                {
+                  icon: "archive-outline",
+                  label: "أرشفة المنتج",
+                  onPress: () => archiveProductAction(productMenuFor),
+                },
+                {
+                  icon: "trash-outline",
+                  label: "حذف المنتج",
+                  danger: true,
+                  onPress: () => deleteProduct(productMenuFor),
+                },
+              ]
+            : []
+        }
+      />
     </ScreenContainer>
   );
 }
@@ -1120,12 +1345,19 @@ function StatCard({
 function GridCard({
   product,
   onPress,
+  onLongPress,
 }: {
   product: Product;
   onPress: () => void;
+  onLongPress?: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.gridCard}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={320}
+      style={styles.gridCard}
+    >
       <View style={styles.gridImage}>
         {product.imageUri ? (
           <Image

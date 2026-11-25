@@ -5,11 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { I18nManager, Platform } from "react-native";
+import { I18nManager, Platform, StyleSheet, View } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
-import { AppLock } from "@/components/app-lock";
-import { AppProvider } from "@/lib/local-store";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -21,11 +19,16 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 
+// RTL must be enabled before the first render so the initial screen (the
+// launcher) is laid out right-to-left, not just the screens rendered later.
+I18nManager.allowRTL(true);
+I18nManager.forceRTL(true);
+
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
 export const unstable_settings = {
-  anchor: "(tabs)",
+  anchor: "index",
 };
 
 export default function RootLayout() {
@@ -82,18 +85,34 @@ export default function RootLayout() {
     };
   }, [initialInsets, initialFrame]);
 
+  const stack = (
+    <>
+      {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
+      {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
+      {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="apsher" />
+        <Stack.Screen name="mazraaty" />
+        <Stack.Screen name="oauth/callback" />
+      </Stack>
+      <StatusBar style="auto" />
+    </>
+  );
+
+  // على الويب نحاكي تجربة تليفون: إطار بعرض هاتف متمركز في المنتصف.
+  // على أندرويد/iOS يأخذ التطبيق حجم الجهاز تلقائيًا (هاتف أو تابلت).
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
-          {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
-          {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="oauth/callback" />
-          </Stack>
-          <StatusBar style="auto" />
+          {Platform.OS === "web" ? (
+            <View style={layoutStyles.stage}>
+              <View style={layoutStyles.phone}>{stack}</View>
+            </View>
+          ) : (
+            stack
+          )}
         </QueryClientProvider>
       </trpc.Provider>
     </GestureHandlerRootView>
@@ -107,7 +126,7 @@ export default function RootLayout() {
         <SafeAreaProvider initialMetrics={providerInitialMetrics}>
           <SafeAreaFrameContext.Provider value={frame}>
             <SafeAreaInsetsContext.Provider value={insets}>
-              <AppProvider><AppLock>{content}</AppLock></AppProvider>
+              {content}
             </SafeAreaInsetsContext.Provider>
           </SafeAreaFrameContext.Provider>
         </SafeAreaProvider>
@@ -117,7 +136,33 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}><AppProvider><AppLock>{content}</AppLock></AppProvider></SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{content}</SafeAreaProvider>
     </ThemeProvider>
   );
 }
+
+const layoutStyles = StyleSheet.create({
+  stage: {
+    flex: 1,
+    backgroundColor: "#E6EAF1",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  phone: {
+    width: "100%",
+    maxWidth: 412,
+    height: "100%",
+    maxHeight: 915,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 34,
+    borderWidth: 1,
+    borderColor: "#D2DAE6",
+    overflow: "hidden",
+    shadowColor: "#10253F",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+});

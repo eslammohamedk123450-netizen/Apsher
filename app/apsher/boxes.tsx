@@ -15,6 +15,8 @@ import {
   View,
 } from "react-native";
 import Svg, { Line, Polygon } from "react-native-svg";
+import { ActionSheet } from "@/components/mazraaty/action-sheet";
+import { confirmAction } from "@/components/mazraaty/confirm";
 import { Barcode } from "@/components/barcode";
 import { ScreenContainer } from "@/components/screen-container";
 import { VoiceInput } from "@/components/voice-input";
@@ -166,7 +168,7 @@ function BoxItemRow({
 }
 
 export default function BoxesScreen() {
-  const { data, commit, pickImage } = useApp();
+  const { data, commit, pickImage, archiveBox, removeBox } = useApp();
   const { boxId, itemId } = useLocalSearchParams<{
     boxId?: string;
     itemId?: string;
@@ -174,6 +176,7 @@ export default function BoxesScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<Box | null>(null);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [boxMenuFor, setBoxMenuFor] = useState<Box | null>(null);
 
   useEffect(() => {
     if (!boxId) return;
@@ -226,14 +229,11 @@ export default function BoxesScreen() {
     if (!selected) return;
     const boxToDelete = selected;
     const remove = () => {
-      void commit((previous) => ({
-        ...previous,
-        boxes: previous.boxes.filter((box) => box.id !== boxToDelete.id),
-      }));
+      removeBox(boxToDelete.id);
       setSelected(null);
       setFocusedItemId(null);
     };
-    const message = `سيتم حذف الصندوق «${boxToDelete.name || "بدون اسم"}» وكل العناصر الموجودة بداخله. لا يمكن التراجع عن هذه العملية.`;
+    const message = `سيتم نقل الصندوق «${boxToDelete.name || "بدون اسم"}» وكل العناصر الموجودة بداخله إلى المحذوفات.`;
     if (Platform.OS === "web") {
       if (typeof window !== "undefined" && window.confirm(message)) remove();
     } else
@@ -496,6 +496,8 @@ export default function BoxesScreen() {
                 setFocusedItemId(null);
                 setSelected(box);
               }}
+              onLongPress={() => setBoxMenuFor(box)}
+              delayLongPress={320}
             >
               <View style={styles.boxArtwork}>
                 {box.imageUri ? (
@@ -789,6 +791,49 @@ export default function BoxesScreen() {
           </View>
         </View>
       </Modal>
+
+      <ActionSheet
+        visible={Boolean(boxMenuFor)}
+        title={boxMenuFor?.name || "صندوق بدون اسم"}
+        onClose={() => setBoxMenuFor(null)}
+        accentColor={C.blue}
+        accentSoft={C.blueLight}
+        dangerColor={C.red}
+        actions={
+          boxMenuFor
+            ? [
+                {
+                  icon: "open-outline",
+                  label: "فتح الصندوق",
+                  onPress: () => {
+                    setFocusedItemId(null);
+                    setSelected(boxMenuFor);
+                  },
+                },
+                {
+                  icon: "archive-outline",
+                  label: "أرشفة الصندوق",
+                  onPress: () =>
+                    confirmAction(
+                      `سيتم نقل صندوق «${boxMenuFor.name || "بدون اسم"}» إلى الأرشيف. متأكد؟`,
+                      () => archiveBox(boxMenuFor.id, true),
+                      "أرشفة",
+                    ),
+                },
+                {
+                  icon: "trash-outline",
+                  label: "حذف الصندوق",
+                  danger: true,
+                  onPress: () =>
+                    confirmAction(
+                      `سيتم نقل صندوق «${boxMenuFor.name || "بدون اسم"}» وكل عناصره إلى المحذوفات. متأكد؟`,
+                      () => removeBox(boxMenuFor.id),
+                    ),
+                },
+              ]
+            : []
+        }
+      />
     </ScreenContainer>
   );
 }
@@ -842,6 +887,9 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     gap: 14,
     backgroundColor: C.bg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerCopy: { flex: 1, alignItems: "flex-end" },
